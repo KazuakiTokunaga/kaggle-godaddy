@@ -15,11 +15,12 @@ from sklearn.impute import KNNImputer
 mbd = 'microbusiness_density'
 
 
-def get_simple_model(algo='lgbm'):
+def get_model(algo='lgbm'):
 
     if algo == 'lgbm':
+        print('use lgbm model.')
         params = {
-            'n_iter': 30,
+            'n_iter': 200,
             'verbosity': -1,
             'objective': 'l1',
             'random_state': 42,
@@ -34,9 +35,12 @@ def get_simple_model(algo='lgbm'):
             'min_data_in_leaf': 213
         }
         model = lgb.LGBMRegressor(**params)
+
+        return model
     
+
     elif algo=='xgb':
-        print('use xgb.')
+        print('use xgb model.')
         model = xgb.XGBRegressor(
             objective='reg:pseudohubererror',
             #objective='reg:squarederror',
@@ -51,14 +55,13 @@ def get_simple_model(algo='lgbm'):
             eval_metric='mae',
         )
 
+        return model
 
-    return model
 
-
-def get_ensemble():
-    
-    params = {
-        'n_iter': 250,
+    elif algo=='ensemble':
+        print('use ensemble model.')
+        params = {
+        'n_iter': 200,
         'verbosity': -1,
         'objective': 'l1',
         'random_state': 42,
@@ -70,58 +73,46 @@ def get_ensemble():
         'lambda_l2': 7.557660410418351,
         'num_leaves': 61,
         "seed": 42,
-        'min_data_in_leaf': 213
-    }
+        'min_data_in_leaf': 213}
 
-    lgb_model = lgb.LGBMRegressor(**params)
-    
-    xgb_model = xgb.XGBRegressor(
-        objective='reg:pseudohubererror',
-        #objective='reg:squarederror',
-        tree_method="hist",
-        n_estimators=4999,
-        learning_rate=0.0075,
-        max_leaves = 17,
-        subsample=0.50,
-        colsample_bytree=0.50,
-        max_bin=4096,
-        n_jobs=2,
-        eval_metric='mae',
-        early_stopping_rounds=70,
-    )
-    
-    cat_model = cat.CatBoostRegressor(
-        iterations=1200,
-        loss_function="MAPE",
-        verbose=0,
-        learning_rate=0.075,
-        l2_leaf_reg=0.2,
-        subsample=0.50,
-        max_bin=4096
-    )
-    
-
-    # knn_model = Pipeline([
-    #     ('imputer',  KNNImputer(n_neighbors=2)),
-    #     ('knn', KNeighborsRegressor(5))
-    # ])
-    
-    return VotingRegressor([
-        ('xgb', xgb_model),
-        ('lgb', lgb_model),
-        ('cat', cat_model)
-        # ('knn', knn_model)
-    ])
+        lgb_model = lgb.LGBMRegressor(**params)
+        
+        xgb_model = xgb.XGBRegressor(
+            objective='reg:pseudohubererror',
+            #objective='reg:squarederror',
+            tree_method="hist",
+            n_estimators=795,
+            learning_rate=0.0075,
+            max_leaves = 17,
+            subsample=0.50,
+            colsample_bytree=0.50,
+            max_bin=4096,
+            n_jobs=2,
+        )
+        
+        cat_model = cat.CatBoostRegressor(
+            iterations=1200,
+            loss_function="MAPE",
+            verbose=0,
+            learning_rate=0.075,
+            l2_leaf_reg=0.2,
+            subsample=0.50,
+            max_bin=4096,
+        )
+        
+        return VotingRegressor([
+            ('xgb', xgb_model),
+            ('lgb', lgb_model),
+            ('cat', cat_model)
+        ])
 
 
 class LgbmBaseline():
 
     def __init__(self, run_fold_name, df_subm, df_all, df_census, params={
-        "ensemble": False,
         "act_thre": 2.00,
         "abs_thre": 1.00,
         "USE_LAG": 5,
-        "USE_OLD_LOG": False,
         "USE_TREND": False,
         "blacklist": [],
         "blacklistcfips": [],
@@ -133,17 +124,16 @@ class LgbmBaseline():
         self.df_subm = df_subm
         self.df_census = df_census
 
-        self.ensemble = params['ensemble']
         self.act_thre = params['act_thre']
         self.abs_thre = params['abs_thre']
         self.USE_LAG = params['USE_LAG']
-        self.USE_OLD_LOG = params['USE_OLD_LOG']
         self.USE_TREND = params['USE_TREND']
         self.blacklist = params['blacklist']
         self.blacklistcfips = params['blacklistcfips']
         self.clip = params['clip']
         self.model = params['model']
         
+        self.print_feature = False
         self.accum = False
         self.output_dic = dict()
 
@@ -197,14 +187,12 @@ class LgbmBaseline():
 
         target = f'select_rate{pred_m}'
         features = preprocess.create_features(df_all, pred_m, train_times, self.USE_LAG)
-        print(features)
+        if not self.print_feature:
+            print(features)
+            self.print_feature = True
         
         # Extract Valid and Train data.
-        if self.USE_OLD_LOG:
-            train_indices = (df_all['scale']<=train_times) & (df_all['scale']>=1) & (df_all[f'select_lastactive{train_times}']>self.act_thre) & (df_all[f'select_lastmbd{train_times}']>self.abs_thre)
-        else:
-            train_indices = (df_all['scale']<=train_times) & (df_all['scale']>=pred_m+self.USE_LAG) & (df_all[f'select_lastactive{train_times}']>=self.act_thre)
-        
+        train_indices = (df_all['scale']<=train_times) & (df_all['scale']>=2) & (df_all[f'select_lastactive{train_times}']>self.act_thre) & (df_all[f'select_lastmbd{train_times}']>self.abs_thre)
         X_train = df_all.loc[train_indices, features]
         y_train = df_all.loc[train_indices, target]
 
@@ -214,10 +202,7 @@ class LgbmBaseline():
         y_valid = df_valid.loc[valid_indices, target]
         
         # Create Model and predict.
-        if self.ensemble:
-            model = get_ensemble()
-        else:
-            model = get_simple_model(algo=self.model)
+        model = get_model(algo=self.model)
         model.fit(X_train, y_train.clip(self.clip[0], self.clip[1]))
         y_pred = model.predict(X_valid)
         
@@ -342,7 +327,7 @@ class LgbmBaseline():
             self.export_scores_summary(pred_ms=[1,2,3,4,5], scale=[36,37,38,39,40])
 
 
-    def create_submission(self, target_scale=[41,42,43,44,45], accum=False, save=True, filename=''):
+    def create_submission(self, target_scale=[41,42,43,44,45], accum=True, save=True, filename=''):
 
         if accum:
             self.run_validation(

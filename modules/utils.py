@@ -166,6 +166,15 @@ def merge_unemploy(df_all):
 
     return df_all
 
+def merge_coord(df_all):
+
+    df_coords = pd.read_csv("../input/cfips_location.csv")
+    df_all = df_all.reset_index()
+    df_all = df_all.merge(df_coords.drop("name", axis=1), on="cfips")
+    df_all = df_all.set_index('row_id')
+
+    return df_all
+
 
 def smooth_outlier(df_all, max_scale=40):
     print(f'smooth_outlier: max_scale={max_scale}')
@@ -178,7 +187,7 @@ def smooth_outlier(df_all, max_scale=40):
         tmp = df_all.loc[indices].copy().reset_index(drop=True)
         var = tmp.microbusiness_density.values.copy()
         
-        for i in range(max_scale-1, 2, -1):
+        for i in range(max_scale, 0, -1):
             thr = 0.20*np.mean(var[:i])
             difa = abs(var[i]-var[i-1])
             if (difa>=thr):
@@ -195,7 +204,7 @@ def smooth_outlier(df_all, max_scale=40):
     return df_all
 
 def merge_dataset(df_train, df_test, pop=True, census=True, 
-                unemploy=True, outlier=False, categorize=False):
+                unemploy=True, outlier=False, coord=True, categorize=False):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
 
@@ -205,6 +214,8 @@ def merge_dataset(df_train, df_test, pop=True, census=True,
         df_all = merge_census(df_all)
     if unemploy:
         df_all = merge_unemploy(df_all)
+    if coord:
+        df_all = merge_coord(df_all)
     if outlier:
         df_all = smooth_outlier(df_all)
     
