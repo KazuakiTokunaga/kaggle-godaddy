@@ -15,27 +15,44 @@ from sklearn.impute import KNNImputer
 mbd = 'microbusiness_density'
 
 
-def get_lgbm():
+def get_simple_model(algo='lgbm'):
 
-    params = {
-        'n_iter': 200,
-        'verbosity': -1,
-        'objective': 'l1',
-        'random_state': 42,
-        'colsample_bytree': 0.8841279649367693,
-        'colsample_bynode': 0.10142964450634374,
-        'max_depth': 8,
-        'learning_rate': 0.013647749926797374,
-        'lambda_l1': 1.8386216853616875,
-        'lambda_l2': 7.557660410418351,
-        'num_leaves': 61,
-        "seed": 42,
-        'min_data_in_leaf': 213
-    }
+    if algo == 'lgbm':
+        params = {
+            'n_iter': 30,
+            'verbosity': -1,
+            'objective': 'l1',
+            'random_state': 42,
+            'colsample_bytree': 0.8841279649367693,
+            'colsample_bynode': 0.10142964450634374,
+            'max_depth': 8,
+            'learning_rate': 0.013647749926797374,
+            'lambda_l1': 1.8386216853616875,
+            'lambda_l2': 7.557660410418351,
+            'num_leaves': 61,
+            "seed": 42,
+            'min_data_in_leaf': 213
+        }
+        model = lgb.LGBMRegressor(**params)
+    
+    elif algo=='xgb':
+        print('use xgb.')
+        model = xgb.XGBRegressor(
+            objective='reg:pseudohubererror',
+            #objective='reg:squarederror',
+            tree_method="hist",
+            n_estimators=805,
+            learning_rate=0.0075,
+            max_leaves = 31,
+            subsample=0.60,
+            colsample_bytree=0.50,
+            max_bin=4096,
+            n_jobs=2,
+            eval_metric='mae',
+        )
 
-    lgb_model = lgb.LGBMRegressor(**params)
 
-    return lgb_model
+    return model
 
 
 def get_ensemble():
@@ -60,14 +77,17 @@ def get_ensemble():
     
     xgb_model = xgb.XGBRegressor(
         objective='reg:pseudohubererror',
+        #objective='reg:squarederror',
         tree_method="hist",
-        n_estimators=795,
+        n_estimators=4999,
         learning_rate=0.0075,
         max_leaves = 17,
         subsample=0.50,
         colsample_bytree=0.50,
         max_bin=4096,
-        n_jobs=2
+        n_jobs=2,
+        eval_metric='mae',
+        early_stopping_rounds=70,
     )
     
     cat_model = cat.CatBoostRegressor(
@@ -96,39 +116,44 @@ def get_ensemble():
 
 class LgbmBaseline():
 
-    def __init__(self, run_fold_name, df_subm, df_all, params={
+    def __init__(self, run_fold_name, df_subm, df_all, df_census, params={
         "ensemble": False,
-        "act_thre": 2,
+        "act_thre": 2.00,
+        "abs_thre": 1.00,
         "USE_LAG": 5,
         "USE_OLD_LOG": False,
         "USE_TREND": False,
         "blacklist": [],
         "blacklistcfips": [],
-        "clip": (None, None)
+        "clip": (None, None),
+        "model": 'lgbm'
     }):
 
         self.run_fold_name = run_fold_name
         self.df_subm = df_subm
+        self.df_census = df_census
 
         self.ensemble = params['ensemble']
         self.act_thre = params['act_thre']
+        self.abs_thre = params['abs_thre']
         self.USE_LAG = params['USE_LAG']
         self.USE_OLD_LOG = params['USE_OLD_LOG']
         self.USE_TREND = params['USE_TREND']
         self.blacklist = params['blacklist']
         self.blacklistcfips = params['blacklistcfips']
         self.clip = params['clip']
+        self.model = params['model']
         
         self.accum = False
         self.output_dic = dict()
 
         self.df_all_dict = dict()
-        for i in range(30, 39):
+        for i in range(40, 41):
             self.df_all_dict[i] = preprocess.add_lag_features(df_all, max_scale=i, USE_LAG = self.USE_LAG)
             print(f'created df_all_dict[{i}]')
 
-        self.df_all = self.df_all_dict[38]
-        self.output_features = ['cfips', 'county', 'state', 'microbusiness_density', 'active', 'year','month', 'scale', 
+        self.df_all = self.df_all_dict[40]
+        self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'active', 'year','month', 'scale', 
                                 'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_trend', 'y_base', 'y_pred', 'smape']
 
 
@@ -143,7 +168,7 @@ class LgbmBaseline():
                 r2 = output2[output2['scale']==i-c].reset_index()
                 r1 = pd.concat([r1, r2])
             
-            last_exist_scale = i - (accum_cnt-1)
+            last_exist_scale = i - accum_cnt
 
             df_all_t = self.df_all
             df_merged = df_all_t.merge(r1[['row_id', 'mbd_pred']], how='left', on='row_id').set_index('row_id')
@@ -172,10 +197,11 @@ class LgbmBaseline():
 
         target = f'select_rate{pred_m}'
         features = preprocess.create_features(df_all, pred_m, train_times, self.USE_LAG)
+        print(features)
         
         # Extract Valid and Train data.
         if self.USE_OLD_LOG:
-            train_indices = (df_all['scale']<=train_times) & (df_all['scale']>=pred_m) & (df_all[f'select_lastactive{train_times}']>=self.act_thre)
+            train_indices = (df_all['scale']<=train_times) & (df_all['scale']>=1) & (df_all[f'select_lastactive{train_times}']>self.act_thre) & (df_all[f'select_lastmbd{train_times}']>self.abs_thre)
         else:
             train_indices = (df_all['scale']<=train_times) & (df_all['scale']>=pred_m+self.USE_LAG) & (df_all[f'select_lastactive{train_times}']>=self.act_thre)
         
@@ -183,7 +209,7 @@ class LgbmBaseline():
         y_train = df_all.loc[train_indices, target]
 
         df_valid =  df_all.loc[df_all['scale']==valid_time].copy()
-        valid_indices = (df_valid[f'select_lastactive{train_times}']>=self.act_thre) & (~df_valid['cfips'].isin(self.blacklistcfips))  & (~df_valid['state'].isin(self.blacklist))
+        valid_indices = (df_valid[f'select_lastactive{train_times}']>self.act_thre) & (~df_valid['cfips'].isin(self.blacklistcfips))  & (~df_valid['state'].isin(self.blacklist)) & (df_all[f'select_lastmbd{train_times}']>self.abs_thre)
         X_valid = df_valid.loc[valid_indices, features]
         y_valid = df_valid.loc[valid_indices, target]
         
@@ -191,7 +217,7 @@ class LgbmBaseline():
         if self.ensemble:
             model = get_ensemble()
         else:
-            model = get_lgbm()
+            model = get_simple_model(algo=self.model)
         model.fit(X_train, y_train.clip(self.clip[0], self.clip[1]))
         y_pred = model.predict(X_valid)
         
@@ -209,6 +235,7 @@ class LgbmBaseline():
         
         # Use Last Value.
         df_valid['mbd_last'] = df_valid[f'select_lastmbd{train_times}']
+        # lastvalue_indices = (~df_valid['cfips'].isna())
         lastvalue_indices = ~(valid_indices)
         df_valid.loc[lastvalue_indices, 'mbd_pred'] = df_valid.loc[lastvalue_indices, 'mbd_last']
         df_valid.loc[lastvalue_indices, 'y_pred'] = df_valid.loc[lastvalue_indices, f'select_rate{pred_m}_lag{pred_m}']
@@ -239,7 +266,7 @@ class LgbmBaseline():
         return df_output.reset_index().rename(columns={'index': 'row_id'}).set_index('row_id')
 
 
-    def export_scores_summary(self, pred_ms = [1,2,3,4], scale=[], filename=''):
+    def export_scores_summary(self, pred_ms = [1,2,3,4,5], scale=[], filename=''):
         
         if not self.output_dic:
             raise Exception('found no result. Execute run_validation first.')
@@ -266,7 +293,7 @@ class LgbmBaseline():
         print(f'saved output/{name}.csv')
 
 
-    def run_validation(self, max_month=38, m_len=5, pred_ms=[1,2,3,4], export=True, 
+    def run_validation(self, max_month=40, m_len=5, pred_ms=[1,2,3,4,5], export=True, 
                         filename='', accum = False, accum_cnt=0, out_idx=[]):
 
         self.accum = accum
@@ -291,7 +318,7 @@ class LgbmBaseline():
             self.export_scores_summary(pred_ms=pred_ms, filename=filename)
 
 
-    def accum_validation(self, max_month=38, m_len=5, export=True):
+    def accum_validation(self, max_month=40, m_len=5, export=True):
 
         self.run_validation(
             max_month=max_month,
@@ -300,7 +327,7 @@ class LgbmBaseline():
             export=False
         )
 
-        for i in range(2, 5):
+        for i in range(2, 6):
             self.run_validation(
                 max_month=max_month,
                 m_len=m_len + (4-i),
@@ -312,10 +339,10 @@ class LgbmBaseline():
             )
 
         if export:
-            self.export_scores_summary(pred_ms=[1,2,3,4], scale=[34, 35,36,37,38])
+            self.export_scores_summary(pred_ms=[1,2,3,4,5], scale=[36,37,38,39,40])
 
 
-    def create_submission(self, target_scale=[39,40,41,42], accum=False, save=True, filename=''):
+    def create_submission(self, target_scale=[41,42,43,44,45], accum=False, save=True, filename=''):
 
         if accum:
             self.run_validation(
@@ -346,9 +373,21 @@ class LgbmBaseline():
                 else:
                     df_pred = pd.concat([df_pred, self.output_dic[k+1]])
         
+        # 予測値をマージ
         df_merged = pd.merge(self.df_subm, df_pred['mbd_pred'], how='left', on='row_id')
-        df_merged.loc[~df_merged['mbd_pred'].isna(), 'microbusiness_density'] = df_merged['mbd_pred']
-        df_submission = df_merged['microbusiness_density']
+        df_merged.loc[~df_merged['mbd_pred'].isna(), mbd] = df_merged['mbd_pred']
+        df_submission = df_merged[mbd]
+
+        # 人口分だけ補正
+        df_submission = df_submission.reset_index()
+        df_submission['cfips'] = df_submission['row_id'].apply(lambda x: int(x.split('_')[0]))
+        adult2020 = self.df_census.set_index('cfips')['adult_2020'].to_dict()
+        adult2021 = self.df_census.set_index('cfips')['adult_2021'].to_dict()
+        df_submission['adult2020'] = df_submission['cfips'].map(adult2020)
+        df_submission['adult2021'] = df_submission['cfips'].map(adult2021)
+        df_submission[mbd] = df_submission[mbd] * df_submission['adult2020'] / df_submission['adult2021']
+        df_submission = df_submission.drop(['adult2020','adult2021','cfips'],axis=1)
+        df_submission = df_submission.set_index('row_id')
         
         dt_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
         dt_str = dt_now.strftime('%Y-%m-%d_%H:%M:%S')

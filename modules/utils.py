@@ -45,7 +45,7 @@ def get_df_all(df_train, df_test, categorize=False):
     df_all.sort_index(inplace=True)
 
     df_all['county'] = (df_all['county'] + df_all['state']).factorize()[0]
-    df_all['state'] = df_all['state'].factorize()[0]
+    df_all['state_i'] = df_all['state'].factorize()[0]
 
     if categorize:
         cat_cols = ['county', 'state']
@@ -60,8 +60,34 @@ def load_dataset():
     df_train = pd.read_csv(BASE + 'train.csv',  index_col='row_id')
     df_test = pd.read_csv(BASE + 'test.csv',  index_col='row_id')
     df_subm = pd.read_csv(BASE + 'sample_submission.csv',  index_col='row_id')
+    df_revealed_test = pd.read_csv(BASE + 'revealed_test.csv', index_col='row_id')
+
+    df_train = df_train[~(df_train['first_day_of_month']>='2022-11-01')]
+    df_test = df_test[df_test['first_day_of_month']>='2023-01-01']
+
+    df_train = pd.concat([df_train, df_revealed_test])
 
     return df_train, df_test, df_subm
+
+def load_census():
+
+    BASE = '../input/'
+    COLS = ['GEO_ID','S0101_C01_026E']
+
+    for i in [2017, 2018, 2019, 2020, 2021]:
+        df_add = pd.read_csv(BASE + f'census-data-for-godaddy/ACSST5Y{i}.S0101-Data.csv',usecols=COLS)
+        df_add = df_add.iloc[1:] 
+        df_add['cfips'] = df_add.GEO_ID.apply(lambda x: int(x.split('US')[-1]) )
+        df_add['S0101_C01_026E'] = df_add['S0101_C01_026E'].astype('int')
+        df_add.rename(columns={'S0101_C01_026E': f'adult_{i}'}, inplace=True)
+        df_add.drop(['GEO_ID'], inplace=True, axis=1)
+        
+        if i == 2017:
+            df_pop = df_add.copy()
+        else:
+            df_pop = df_pop.merge(df_add, how='left', on='cfips')
+
+    return df_pop    
 
 
 def merge_census(df_all):
@@ -141,7 +167,7 @@ def merge_unemploy(df_all):
     return df_all
 
 
-def smooth_outlier(df_all, max_scale=38):
+def smooth_outlier(df_all, max_scale=40):
     print(f'smooth_outlier: max_scale={max_scale}')
     
     outliers = []
@@ -213,7 +239,7 @@ def regularize(x, v):
     return x
 
 
-def insert_trend(df_sub_base, df_all, trend_dict, month_str='_2022-11-01', replace=True):
+def insert_trend(df_sub_base, df_all, trend_dict, month_str='_2023-01-01', replace=True):
 
     for cfip in trend_dict:
         row_id = str(cfip) + month_str

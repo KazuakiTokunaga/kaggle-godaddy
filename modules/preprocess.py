@@ -7,7 +7,7 @@ from modules import utils
 mbd = 'microbusiness_density'
 
 
-def add_lag_features(df_all, max_scale=38, USE_LAG=5, seasonal=False):
+def add_lag_features(df_all, max_scale=40, USE_LAG=5, seasonal=False):
     print(f'add lag features: max_scale={max_scale}')
 
     for i in range(30, max_scale+1):
@@ -16,51 +16,60 @@ def add_lag_features(df_all, max_scale=38, USE_LAG=5, seasonal=False):
 
         dt = df_all.loc[df_all.scale==i].groupby('cfips')[mbd].agg('last')
         df_all[f'select_lastmbd{i}'] = df_all['cfips'].map(dt).astype(float)
-    
-    for i in range(1, 5):
-        df_all.loc[df_all['cfips']==28055, mbd] = 1
 
-        df_all[f'select_rate{i}'] = df_all.groupby('cfips')[mbd].shift(i).bfill()
-        df_all[f'select_rate{i}'] = (df_all[mbd] / df_all[f'select_rate{i}'] - 1).fillna(0)
+    indices = df_all['cfips'].isin([28055, 48301]) # cfips having zero mbd
+    df_t = df_all[~indices].copy()
+    df_t2 = df_all[indices].copy()    
+    for i in range(1, 6):
+        df_t[f'select_rate{i}'] = df_t.groupby('cfips')[mbd].shift(i).bfill()
+        df_t[f'select_rate{i}'] = (df_t[mbd] / df_t[f'select_rate{i}'] - 1).fillna(0)
+        df_t2[f'select_rate{i}'] = 0
+    df_all = pd.concat([df_t, df_t2])
 
-        df_all.loc[df_all['cfips']==28055, mbd] = 0
-
-    for i in range(1, 4+USE_LAG):
+    for i in range(1, 6+USE_LAG):
         df_all[f'select_active_lag{i}'] = df_all.groupby('cfips')['active'].shift(i).bfill()
         df_all[f'select_mbd_lag{i}'] = df_all.groupby('cfips')[mbd].shift(i).bfill()
 
+    for i in range(1, 6):
+        for k in range(1, USE_LAG+1):
+            df_all[f'select_active_lag{i}_diff{k}'] = df_all.groupby('cfips')[f'select_active_lag{i}'].diff(k)
 
-    for i in range(1, 5):
+    for i in range(1, 6):
         for j in range(i, i + USE_LAG):
             df_all[f'select_rate{i}_lag{j}'] = df_all[f'select_rate{i}'].shift(j).bfill()
 
-    for i in range(1, 5):
-        for c in [k for k in range(3, USE_LAG+1)]:
-            df_all[f'select_rate{i}_rsum{c}'] = 0
-            for k in range(i, i+c):
-                df_all[f'select_rate{i}_rsum{c}'] += df_all[f'select_rate{i}_lag{k}']
+    # for i in range(1, 6):
+    #     for c in [k for k in range(3, USE_LAG+1)]:
+    #         df_all[f'select_rate{i}_rsum{c}'] = 0
+    #         for k in range(i, i+c):
+    #             df_all[f'select_rate{i}_rsum{c}'] += df_all[f'select_rate{i}_lag{k}']
+
+    for c in [2,4,6]:
+        df_all[f'select_rate1_rsum{c}'] = df_all.groupby('cfips')[f'select_rate1_lag1'].transform(lambda s: s.rolling(c, min_periods=1).sum())   
+
 
     return df_all
 
 
 def create_features(df_all, pred_m, train_times, USE_LAG = 5):
-    drop_features = [mbd, 'active', 'scale']
+    drop_features = [mbd, 'state', 'active', 'scale', 'county', 'cfips', 'month', 'year']
     features = list(filter(lambda x: (not x.startswith('select_') and (x not in drop_features)),  df_all.columns.to_list()))
     
     # Select appropriate lastactive and lastmbd features.
-    features.append(f'select_lastactive{train_times}')
-    features.append(f'select_lastmbd{train_times}')
+    # features.append(f'select_lastactive{train_times}')
+    # features.append(f'select_lastmbd{train_times}')
     features += list(filter(lambda x: (x.startswith(f'select_rate{pred_m}_')), df_all.columns.to_list()))
+    features += list(filter(lambda x: (x.startswith(f'select_active_lag{pred_m}_diff')), df_all.columns.to_list()))
     
     # Select appropriate target and lag features.
-    for i in range(pred_m, pred_m + USE_LAG):
-        features.append(f'select_active_lag{i}')
-        features.append(f'select_mbd_lag{i}')
+    # for i in range(pred_m, pred_m + USE_LAG):
+    #     features.append(f'select_active_lag{i}')
+        # features.append(f'select_mbd_lag{i}')
     
     return features
 
 
-def get_trend_dict(df_all, train_time=37, n=3, thre=3, active_thre=25000, 
+def get_trend_dict(df_all, train_time=39, n=3, thre=3, active_thre=25000, 
                     regularize=True, v_regularize=0.003, v_clip=[0.995, 1.005]):
 
     idx = (df_all['scale']>= train_time-n)&(df_all['scale']<=train_time)&(df_all[f'select_lastactive{train_time}']>=active_thre)
