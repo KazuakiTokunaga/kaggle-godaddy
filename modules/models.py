@@ -8,7 +8,7 @@ import xgboost as xgb
 import catboost as cat
 from modules import utils
 from modules import preprocess
-from sklearn.pipeline import Pipelinea
+from sklearn.pipeline import Pipeline
 
 mbd = 'microbusiness_density'
 
