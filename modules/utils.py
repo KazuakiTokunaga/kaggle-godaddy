@@ -87,7 +87,7 @@ def load_census(BASE = '../input/'):
     return df_pop    
 
 
-def merge_census(df_all, BASE='../input/'):
+def merge_census_starter(df_all, BASE='../input/'):
     
     df_census = pd.read_csv(BASE + 'census_starter.csv', index_col='cfips')
 
@@ -201,22 +201,27 @@ def smooth_outlier(df_all, max_scale=40):
     return df_all
 
 def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, 
-                unemploy=True, outlier=False, coord=True, categorize=False):
+                unemploy=True, outlier=False, coord=True, fix_pop=True, categorize=False):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
 
     if pop:
         df_all = merge_pop(df_all, BASE)
     if census:
-        df_all = merge_census(df_all, BASE)
+        df_all = merge_census_starter(df_all, BASE)
     if unemploy:
         df_all = merge_unemploy(df_all, BASE)
     if coord:
         df_all = merge_coord(df_all, BASE)
+
+    df_census = load_census(BASE)
+    if fix_pop:
+        df_all = fix_population(df_all, df_census)
+
     if outlier:
         df_all = smooth_outlier(df_all)
     
-    return df_all
+    return df_all, df_census
 
 
 def fix_population(df_all, df_census):
@@ -265,17 +270,51 @@ def regularize(x, v):
     return x
 
 
-def insert_trend(df_sub_base, df_all, trend_dict, month_str='_2023-01-01', replace=True):
+def insert_trend(df_sub_base, df_all, trend_dict, month_str='_2023-01-01', method='replace'):
 
     for cfip in trend_dict:
         row_id = str(cfip) + month_str
     
-        if replace:
-            df_sub_base.loc[row_id, :] = (trend_dict[cfip] * df_all.loc[(df_all['scale']==38)&(df_all['cfips']==cfip), mbd]).values[0]
-        else:
+        if method=='replace':
+            df_sub_base.loc[row_id, :] = (trend_dict[cfip] * df_all.loc[(df_all['scale']==40)&(df_all['cfips']==cfip), mbd]).values[0]
+        elif method=='mean':
             trend_values = (trend_dict[cfip] * df_all.loc[(df_all['scale']==38)&(df_all['cfips']==cfip), mbd]).values[0]
             df_sub_base.loc[row_id, :] = (df_sub_base.loc[row_id].values[0] + trend_values) / 2
+        else:
+            raise Exception()
         
     return df_sub_base
 
 
+def adjust_population(df_submission, df_census):
+
+    df_submission = df_submission.reset_index()
+    df_submission['cfips'] = df_submission['row_id'].apply(lambda x: int(x.split('_')[0]))
+    adult2020 = df_census.set_index('cfips')['adult_2020'].to_dict()
+    adult2021 = df_census.set_index('cfips')['adult_2021'].to_dict()
+    df_submission['adult2020'] = df_submission['cfips'].map(adult2020)
+    df_submission['adult2021'] = df_submission['cfips'].map(adult2021)
+    df_submission[mbd] = df_submission[mbd] * df_submission['adult2020'] / df_submission['adult2021']
+    df_submission = df_submission.drop(['adult2020','adult2021','cfips'],axis=1)
+    df_submission = df_submission.set_index('row_id')
+
+    return df_submission
+
+
+def compare_submission(df_submission, filename):
+
+    df_submission = df_submission.reset_index()
+    df_submission['cfips'] = df_submission['row_id'].apply(lambda x: int(x.split('_')[0]))
+    df_submission['month'] = df_submission['row_id'].apply(lambda x: x.split('_')[1])
+    df_subm202301 = df_submission[df_submission['month']=='2023-01-01']
+
+    df_baseline = pd.read_csv(f'../submission/{filename}.csv')
+    df_baseline['cfips'] = df_baseline['row_id'].apply(lambda x: int(x.split('_')[0]))
+    df_baseline['month'] = df_baseline['row_id'].apply(lambda x: x.split('_')[1])
+    df_baseline202301 = df_baseline[df_baseline['month']=='2023-01-01'].copy()
+    df_baseline202301.rename(columns={mbd: 'baseline'}, inplace=True)
+
+    df_merged = df_subm202301.merge(df_baseline202301[['row_id', 'baseline']], how='left', on='row_id')
+    df_merged['smape'] = smape_arr(df_merged[mbd], df_merged['baseline'])
+
+    return df_merged

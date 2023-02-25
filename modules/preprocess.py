@@ -7,7 +7,7 @@ from modules import utils
 mbd = 'microbusiness_density'
 
 
-def add_lag_features(df_all, max_scale=40, USE_LAG=5, seasonal=False):
+def add_lag_features(df_all, max_scale=40, USE_LAG=7):
     print(f'add lag features: max_scale={max_scale}')
 
     for i in range(30, max_scale+1):
@@ -53,6 +53,9 @@ def create_features(df_all, pred_m, train_times, USE_LAG = 5):
 def get_trend_dict(df_all, train_time=40, n=3, thre=3, active_thre=25000, 
                     regularize=True, v_regularize=0.003, v_clip=[0.995, 1.005]):
 
+    dt = df_all.loc[df_all.scale==train_time].groupby('cfips')['active'].agg('last')
+    df_all[f'select_lastactive{train_time}'] = df_all['cfips'].map(dt).astype(float)
+
     idx = (df_all['scale']>= train_time-n)&(df_all['scale']<=train_time)&(df_all[f'select_lastactive{train_time}']>=active_thre)
     df_target_lag = df_all[idx].copy()
     for i in range(1, n+1):
@@ -88,3 +91,22 @@ def get_trend_dict(df_all, train_time=40, n=3, thre=3, active_thre=25000,
     trend_dict = df_trend[['cfips', 'trend']].set_index('cfips').to_dict()['trend']
     
     return df_trend, trend_dict
+
+
+def get_trend_multi(df_all, train_time=40, m_len=5, upper_bound=140, lower_bound=20, multi_can=[1.00, 1.002, 1.004]):
+
+    df_extract = df_all[(df_all['scale']<=train_time)&(df_all['scale']>=train_time-m_len)].copy()
+    df_multi = df_extract[(df_extract[f'select_lastactive{train_time}']<=upper_bound)&(df_extract[f'select_lastactive{train_time}']>=lower_bound)].copy()
+
+    mult_column_to_mult = {f'smape_{mult}': mult for mult in multi_can}
+
+    for mult_column, mult in mult_column_to_mult.items():
+        df_multi['y_pred'] = df_multi['select_mbd_lag1'] * mult
+        df_multi[mult_column] = utils.smape_arr(df_multi[mbd], df_multi['y_pred'])
+        
+    df_agg = df_multi.groupby('cfips')[list(mult_column_to_mult.keys())].mean().copy()
+    df_agg['best_mult'] = df_agg.idxmin(axis=1).map(mult_column_to_mult)
+
+    cfips_to_best_mult = dict(zip(df_agg.index, df_agg['best_mult']))
+
+    return cfips_to_best_mult

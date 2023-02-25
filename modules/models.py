@@ -13,96 +13,67 @@ from sklearn.pipeline import Pipeline
 mbd = 'microbusiness_density'
 
 
-def get_model(algo='lgbm'):
+def get_model(algo='lgb'):
 
-    if algo == 'lgbm':
-        print('use lgbm model.')
-        params = {
-            'n_iter': 200,
-            'verbosity': -1,
-            'objective': 'l1',
-            'random_state': 42,
-            'colsample_bytree': 0.8841279649367693,
-            'colsample_bynode': 0.10142964450634374,
-            'max_depth': 8,
-            'learning_rate': 0.013647749926797374,
-            'lambda_l1': 1.8386216853616875,
-            'lambda_l2': 7.557660410418351,
-            'num_leaves': 61,
-            "seed": 42,
-            'min_data_in_leaf': 213
-        }
-        model = lgb.LGBMRegressor(**params)
-
-        return model
-    
-
-    elif algo=='xgb':
-        print('use xgb model.')
-        model = xgb.XGBRegressor(
-            objective='reg:pseudohubererror',
-            #objective='reg:squarederror',
-            tree_method="hist",
-            n_estimators=805,
-            learning_rate=0.0075,
-            max_leaves = 31,
-            subsample=0.60,
-            colsample_bytree=0.50,
-            max_bin=4096,
-            n_jobs=2,
-            eval_metric='mae',
-        )
-
-        return model
-
-
-    elif algo=='ensemble':
-        print('use ensemble model.')
-        params = {
-        'n_iter': 200,
+    params = {
+        'n_iter': 30,
         'verbosity': -1,
         'objective': 'l1',
         'random_state': 42,
         'colsample_bytree': 0.8841279649367693,
         'colsample_bynode': 0.10142964450634374,
         'max_depth': 8,
-        'learning_rate': 0.013647749926797374,
-        'lambda_l1': 1.8386216853616875,
-        'lambda_l2': 7.557660410418351,
+        'learning_rate': 0.003647749926797374,
+        'lambda_l2': 0.5,
         'num_leaves': 61,
         "seed": 42,
-        'min_data_in_leaf': 213}
+        'min_data_in_leaf': 213
+    }
 
-        lgb_model = lgb.LGBMRegressor(**params)
+    lgb_model = lgb.LGBMRegressor(**params)
+    
+    xgb_model = xgb.XGBRegressor(
+        objective='reg:pseudohubererror',
+        tree_method="hist",
+        n_estimators=795,
+        learning_rate=0.0075,
+        max_leaves = 17,
+        subsample=0.50,
+        colsample_bytree=0.50,
+        max_bin=4096,
+        n_jobs=2,
+    )
+    
+    cat_model = cat.CatBoostRegressor(
+        iterations=800,
+        loss_function="MAPE",
+        verbose=0,
+        grow_policy='SymmetricTree',
+        learning_rate=0.035,
+        max_depth=6,
+        l2_leaf_reg=0.2,
+        subsample=0.50,
+        max_bin=4096,
+    )
+    
+
+    if algo=='lgb':
         
-        xgb_model = xgb.XGBRegressor(
-            objective='reg:pseudohubererror',
-            #objective='reg:squarederror',
-            tree_method="hist",
-            n_estimators=795,
-            learning_rate=0.0075,
-            max_leaves = 17,
-            subsample=0.50,
-            colsample_bytree=0.50,
-            max_bin=4096,
-            n_jobs=2,
-        )
-        
-        cat_model = cat.CatBoostRegressor(
-            iterations=1200,
-            loss_function="MAPE",
-            verbose=0,
-            learning_rate=0.075,
-            l2_leaf_reg=0.2,
-            subsample=0.50,
-            max_bin=4096,
-        )
-        
+        print('use lgb.')
+        return lgb_model
+    
+    elif algo=='xgb':
+
+        print('use xgb.')
+        return xgb_model
+    
+    elif algo=='ensemble':
+
+        print('use ensemble.')
         return VotingRegressor([
             ('xgb', xgb_model),
             ('lgb', lgb_model),
-            ('cat', cat_model)
-        ])
+            ('cat', cat_model)],weights=[3,1,3])
 
 
 class LgbmBaseline():
@@ -127,6 +98,7 @@ class LgbmBaseline():
         self.abs_thre = params['abs_thre']
         self.USE_LAG = params['USE_LAG']
         self.USE_TREND = params['USE_TREND']
+        self.USE_TREND_MULTI = params['USE_TREND_MULTI']
         self.blacklist = params['blacklist']
         self.blacklistcfips = params['blacklistcfips']
         self.clip = params['clip']
@@ -134,7 +106,7 @@ class LgbmBaseline():
         
         self.save_path = save_path
         self.print_feature = False
-        self.accum = False
+        self.accum_cnt = 0
         self.output_dic = dict()
 
         self.df_all_dict = dict()
@@ -144,21 +116,21 @@ class LgbmBaseline():
 
         self.df_all = self.df_all_dict[40]
         self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'active', 'year','month', 'scale', 
-                                'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_trend', 'y_base', 'y_pred', 'smape']
+                                'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_trend', 'mbd_trend_multi', 'y_base', 'y_pred', 'smape']
 
 
-    def get_df_all_dict(self, train_times, accum_cnt):
+    def get_df_all_dict(self, train_times):
         
         for i in train_times:
             print(f'create df_all_dict[{i}].')
-            output1 = self.output_dic[accum_cnt]
+            output1 = self.output_dic[self.accum_cnt]
             r1 = output1[output1['scale']==i].reset_index()
-            for c in range(1, accum_cnt):
-                output2 = self.output_dic[accum_cnt-c]
+            for c in range(1, self.accum_cnt):
+                output2 = self.output_dic[self.accum_cnt-c]
                 r2 = output2[output2['scale']==i-c].reset_index()
                 r1 = pd.concat([r1, r2])
             
-            last_exist_scale = i - accum_cnt
+            last_exist_scale = i - self.accum_cnt
 
             df_all_t = self.df_all
             df_merged = df_all_t.merge(r1[['row_id', 'mbd_pred']], how='left', on='row_id').set_index('row_id')
@@ -220,20 +192,29 @@ class LgbmBaseline():
         
         # Use Last Value.
         df_valid['mbd_last'] = df_valid[f'select_lastmbd{train_times}']
-        # lastvalue_indices = (~df_valid['cfips'].isna())
         lastvalue_indices = ~(valid_indices)
         df_valid.loc[lastvalue_indices, 'mbd_pred'] = df_valid.loc[lastvalue_indices, 'mbd_last']
         df_valid.loc[lastvalue_indices, 'y_pred'] = df_valid.loc[lastvalue_indices, f'select_rate{pred_m}_lag{pred_m}']
         
         # USE Trend.
         df_valid['mbd_trend'] = np.nan
-        if self.USE_TREND and pred_m == 1:
+        if self.USE_TREND:
             df_trend, trend_dict= preprocess.get_trend_dict(df_all, train_times)
             print('# of cfips that have trend :', len(trend_dict))
-            for cfip in trend_dict:
-                df_valid.loc[df_valid['cfips']==cfip, 'mbd_trend'] = df_valid.loc[df_valid['cfips']==cfip, 'y_base'] * trend_dict[cfip]
-                df_valid.loc[df_valid['cfips']==cfip, 'mbd_pred'] = df_valid.loc[df_valid['cfips']==cfip, 'mbd_trend']
-                df_valid.loc[df_valid['cfips']==cfip, 'y_pred'] = (trend_dict[cfip] - 1)
+            df_valid['mbd_trend'] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
+            df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_pred'] = df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_trend']
+            df_valid.loc[~df_valid['mbd_trend'].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
+
+        #USE 
+        c_name = 'mbd_trend_multi'
+        df_valid[c_name] = np.nan
+        if self.USE_TREND_MULTI:
+            trend_dict = preprocess.get_trend_multi(df_all, train_time = train_times, upper_bound=self.act_thre)
+            print('# of cfips that have trend multi:', len(trend_dict))
+            
+            df_valid[c_name] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
+            df_valid.loc[~df_valid[c_name].isna(), 'mbd_pred'] = df_valid.loc[~df_valid[c_name].isna(), c_name]
+            df_valid.loc[~df_valid[c_name].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
         
         df_valid['smape'] = utils.smape_arr(df_valid['microbusiness_density'], df_valid['mbd_pred'])
         df_output = df_valid[self.output_features]
@@ -284,11 +265,11 @@ class LgbmBaseline():
 
 
     def run_validation(self, max_month=40, m_len=5, pred_ms=[1,2,3,4,5], export=True, 
-                        filename='', accum = False, accum_cnt=0, out_idx=[]):
+                        filename='', accum_cnt=0, out_idx=[]):
 
-        self.accum = accum
-        if accum:
-            self.get_df_all_dict(list(range(max_month-m_len, max_month)), accum_cnt)
+        self.accum_cnt = accum_cnt
+        if accum_cnt:
+            self.get_df_all_dict(list(range(max_month-m_len, max_month)))
             print('success in updating df_all_dict')
         
         if not out_idx:
@@ -322,7 +303,6 @@ class LgbmBaseline():
                 max_month=max_month,
                 m_len=m_len + (4-i),
                 pred_ms=[1],
-                accum=True,
                 accum_cnt=i-1,
                 out_idx=[i],
                 export=False
@@ -332,36 +312,26 @@ class LgbmBaseline():
             self.export_scores_summary(pred_ms=[i for i in range(1, max_pred_m+1)], scale=[36,37,38,39,40])
 
 
-    def create_submission(self, target_scale=[41,42,43,44,45], accum=True, save=True, filename=''):
+    def create_submission(self, target_scale=[41,42,43,44,45], save=True, filename=''):
 
-        if accum:
+        self.run_validation(
+            max_month=target_scale[0],
+            m_len=1,
+            pred_ms=[1],
+            export=False
+        )
+        df_pred = self.output_dic[1]
+
+        for k, i in enumerate(target_scale[1:]):
             self.run_validation(
-                max_month=target_scale[0],
+                max_month=i,
                 m_len=1,
                 pred_ms=[1],
-                export=False
+                accum_cnt=k+1,
+                out_idx=[k+2],
+                export = False
             )
-            df_pred = self.output_dic[1]
-
-            for k, i in enumerate(target_scale[1:]):
-                self.run_validation(
-                    max_month=i,
-                    m_len=1,
-                    pred_ms=[1],
-                    accum=True,
-                    accum_cnt=k+1,
-                    out_idx=[k+2],
-                    export = False
-                )
-                df_pred = pd.concat([df_pred, self.output_dic[k+2]])
-        
-        else:
-            for k, i in enumerate(target_scale):
-                self.run_validation(max_month=i, m_len=1, pred_ms=[k+1], export=False)
-                if not k:
-                    df_pred = self.output_dic[k+1]
-                else:
-                    df_pred = pd.concat([df_pred, self.output_dic[k+1]])
+            df_pred = pd.concat([df_pred, self.output_dic[k+2]])
         
         # 予測値をマージ
         df_merged = pd.merge(self.df_subm, df_pred['mbd_pred'], how='left', on='row_id')
@@ -369,19 +339,10 @@ class LgbmBaseline():
         df_submission = df_merged[mbd]
 
         # 人口分だけ補正
-        df_submission = df_submission.reset_index()
-        df_submission['cfips'] = df_submission['row_id'].apply(lambda x: int(x.split('_')[0]))
-        adult2020 = self.df_census.set_index('cfips')['adult_2020'].to_dict()
-        adult2021 = self.df_census.set_index('cfips')['adult_2021'].to_dict()
-        df_submission['adult2020'] = df_submission['cfips'].map(adult2020)
-        df_submission['adult2021'] = df_submission['cfips'].map(adult2021)
-        df_submission[mbd] = df_submission[mbd] * df_submission['adult2020'] / df_submission['adult2021']
-        df_submission = df_submission.drop(['adult2020','adult2021','cfips'],axis=1)
-        df_submission = df_submission.set_index('row_id')
+        df_submission = utils.adjust_population(df_submission, self.df_census)
         
         dt_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
         dt_str = dt_now.strftime('%Y-%m-%d_%H:%M:%S')
-
         if save:
             name = self.run_fold_name
             if filename:
