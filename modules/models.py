@@ -16,7 +16,7 @@ mbd = 'microbusiness_density'
 def get_model(algo='lgb'):
 
     params = {
-        'n_iter': 30,
+        'n_iter': 300,
         'verbosity': -1,
         'objective': 'l1',
         'random_state': 42,
