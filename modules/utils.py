@@ -53,9 +53,7 @@ def get_df_all(df_train, df_test, categorize=False):
     
     return df_all
 
-def load_dataset():
-
-    BASE = '../input/'
+def load_dataset(BASE = '../input/'):
 
     df_train = pd.read_csv(BASE + 'train.csv',  index_col='row_id')
     df_test = pd.read_csv(BASE + 'test.csv',  index_col='row_id')
@@ -69,9 +67,8 @@ def load_dataset():
 
     return df_train, df_test, df_subm
 
-def load_census():
+def load_census(BASE = '../input/'):
 
-    BASE = '../input/'
     COLS = ['GEO_ID','S0101_C01_026E']
 
     for i in [2017, 2018, 2019, 2020, 2021]:
@@ -90,9 +87,9 @@ def load_census():
     return df_pop    
 
 
-def merge_census(df_all):
+def merge_census(df_all, BASE='../input/'):
     
-    df_census = pd.read_csv('../input/census_starter.csv', index_col='cfips')
+    df_census = pd.read_csv(BASE + 'census_starter.csv', index_col='cfips')
 
     df_all = df_all.reset_index()
     df_all = df_all.set_index('cfips')
@@ -105,9 +102,9 @@ def merge_census(df_all):
     return df_all
 
 
-def merge_pop(df_all):
+def merge_pop(df_all, BASE='../input/'):
     
-    df_pop = pd.read_csv('../input/PopulationEstimates.csv')
+    df_pop = pd.read_csv(BASE + 'PopulationEstimates.csv')
 
     p1990 = 'Population 1990'
     p2000 = 'Population 2000'
@@ -132,9 +129,9 @@ def merge_pop(df_all):
 
     return df_all_t
 
-def merge_unemploy(df_all):
+def merge_unemploy(df_all, BASE='../input/'):
 
-    df_unemploy = pd.read_csv('../input/Unemployment.csv', index_col='cfips')
+    df_unemploy = pd.read_csv(BASE + 'Unemployment.csv', index_col='cfips')
 
     rate = 'Unemployment_rate'
     rate2019 = f'{rate}_2019'
@@ -166,9 +163,9 @@ def merge_unemploy(df_all):
 
     return df_all
 
-def merge_coord(df_all):
+def merge_coord(df_all, BASE='../input/'):
 
-    df_coords = pd.read_csv("../input/cfips_location.csv")
+    df_coords = pd.read_csv(BASE + "cfips_location.csv")
     df_all = df_all.reset_index()
     df_all = df_all.merge(df_coords.drop("name", axis=1), on="cfips")
     df_all = df_all.set_index('row_id')
@@ -203,22 +200,40 @@ def smooth_outlier(df_all, max_scale=40):
     
     return df_all
 
-def merge_dataset(df_train, df_test, pop=True, census=True, 
+def merge_dataset(df_train, df_test, BASE='../input/', pop=True, census=True, 
                 unemploy=True, outlier=False, coord=True, categorize=False):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
 
     if pop:
-        df_all = merge_pop(df_all)
+        df_all = merge_pop(df_all, BASE)
     if census:
-        df_all = merge_census(df_all)
+        df_all = merge_census(df_all, BASE)
     if unemploy:
-        df_all = merge_unemploy(df_all)
+        df_all = merge_unemploy(df_all, BASE)
     if coord:
-        df_all = merge_coord(df_all)
+        df_all = merge_coord(df_all, BASE)
     if outlier:
         df_all = smooth_outlier(df_all)
     
+    return df_all
+
+
+def fix_population(df_all, df_census):
+
+    df_all = df_all.reset_index()
+    df_all = df_all.merge(df_census, how='left', on='cfips')
+
+    for year in [2019, 2020, 2021]:
+        indices = (df_all['year']==year)
+        target_year_str = str(year - 2)
+        df_all.loc[indices, mbd] = df_all.loc[indices, mbd] *  df_all.loc[indices, 'adult_2020'] / df_all.loc[indices, f'adult_{target_year_str}']
+    
+    drop_columns = list(df_census.columns)
+    drop_columns.remove('cfips')
+    df_all = df_all.drop(drop_columns, axis=1)
+    df_all = df_all.set_index('row_id')
+
     return df_all
 
 

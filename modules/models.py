@@ -8,9 +8,7 @@ import xgboost as xgb
 import catboost as cat
 from modules import utils
 from modules import preprocess
-from sklearn.pipeline import Pipeline
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.impute import KNNImputer
+from sklearn.pipeline import Pipelinea
 
 mbd = 'microbusiness_density'
 
@@ -109,7 +107,7 @@ def get_model(algo='lgbm'):
 
 class LgbmBaseline():
 
-    def __init__(self, run_fold_name, df_subm, df_all, df_census, params={
+    def __init__(self, run_fold_name, df_subm, df_all, df_census, start_all_dict, save_path=True, params={
         "act_thre": 2.00,
         "abs_thre": 1.00,
         "USE_LAG": 5,
@@ -123,6 +121,7 @@ class LgbmBaseline():
         self.run_fold_name = run_fold_name
         self.df_subm = df_subm
         self.df_census = df_census
+        self.output_dic = '../output/'
 
         self.act_thre = params['act_thre']
         self.abs_thre = params['abs_thre']
@@ -133,12 +132,13 @@ class LgbmBaseline():
         self.clip = params['clip']
         self.model = params['model']
         
+        self.save_path = save_path
         self.print_feature = False
         self.accum = False
         self.output_dic = dict()
 
         self.df_all_dict = dict()
-        for i in range(40, 41):
+        for i in range(start_all_dict, 41):
             self.df_all_dict[i] = preprocess.add_lag_features(df_all, max_scale=i, USE_LAG = self.USE_LAG)
             print(f'created df_all_dict[{i}]')
 
@@ -274,7 +274,12 @@ class LgbmBaseline():
         name = self.run_fold_name + f'_{dt_str}'
 
         df = pd.DataFrame(output_array, columns=['mean', 'std'], index=list(range(1, 7)))
-        df.to_csv(f'../output/{name}.csv')
+
+        if self.save_path:
+            df.to_csv(f'../output/{name}.csv')
+        else:
+            df.to_csv(f'{name}.csv')
+
         print(f'saved output/{name}.csv')
 
 
@@ -303,7 +308,7 @@ class LgbmBaseline():
             self.export_scores_summary(pred_ms=pred_ms, filename=filename)
 
 
-    def accum_validation(self, max_month=40, m_len=5, export=True):
+    def accum_validation(self, max_month=40, max_pred_m = 5, m_len=5, export=True):
 
         self.run_validation(
             max_month=max_month,
@@ -312,7 +317,7 @@ class LgbmBaseline():
             export=False
         )
 
-        for i in range(2, 6):
+        for i in range(2, max_pred_m+1):
             self.run_validation(
                 max_month=max_month,
                 m_len=m_len + (4-i),
@@ -324,7 +329,7 @@ class LgbmBaseline():
             )
 
         if export:
-            self.export_scores_summary(pred_ms=[1,2,3,4,5], scale=[36,37,38,39,40])
+            self.export_scores_summary(pred_ms=[i for i in range(1, max_pred_m+1)], scale=[36,37,38,39,40])
 
 
     def create_submission(self, target_scale=[41,42,43,44,45], accum=True, save=True, filename=''):
@@ -383,7 +388,11 @@ class LgbmBaseline():
                 name += f'_{filename}'
             name += f'_{dt_str}'
 
-            df_submission.to_csv(f'../submission/{name}.csv')
+            if self.save_path:
+                df_submission.to_csv(f'../submission/{name}.csv')
+            else:
+                df_submission.to_csv(f'{name}.csv')
+
             print(f'saved {name}')
             
         self.df_pred = df_pred
