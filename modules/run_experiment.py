@@ -14,6 +14,9 @@ def main(BASE, external, params):
     df_census = utils.load_census(external)
     df_all = utils.fix_population(df_all, df_census)
 
-    myinstance = models.LgbmBaseline('kaggle_notebook_test', df_subm, df_all, df_census, start_all_dict=40, save_path=False, params=params)
-    myinstance.create_submission(accum=True, target_scale=[41])
+    instance_validation = models.LgbmBaseline('validation', df_subm, df_all, df_census, start_all_dict=32, save_path=False, params=params)
+    instance.validation.accum_validation(m_len=5)
+
+    myinstance = models.LgbmBaseline('submission', df_subm, df_all, df_census, start_all_dict=40, save_path=False, params=params)
+    myinstance.create_submission(accum=True)
 
