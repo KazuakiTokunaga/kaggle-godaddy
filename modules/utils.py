@@ -200,7 +200,7 @@ def smooth_outlier(df_all, max_scale=40):
     
     return df_all
 
-def merge_dataset(df_train, df_test, BASE='../input/', pop=True, census=True, 
+def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, 
                 unemploy=True, outlier=False, coord=True, categorize=False):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
