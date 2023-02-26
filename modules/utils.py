@@ -2,12 +2,7 @@ import numpy as np
 import pandas as pd
 import pickle
 
-# import reverse_geocoder as rg
-# from sklearn.preprocessing import LabelEncoder
-# from sklearn.decomposition import PCA
-# from sklearn.cluster import KMeans
-# from umap import UMAP
-
+from modules import preprocess
 
 
 mbd = 'microbusiness_density'
@@ -209,7 +204,8 @@ def smooth_outlier(df_all, max_scale=40):
     return df_all
 
 def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, 
-                unemploy=True, outlier=False, coord=True, fix_pop=True, categorize=False):
+                unemploy=True, outlier=False, coord=True, fix_pop=True, 
+                add_location=False, use_umap=False, categorize=False):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
 
@@ -225,6 +221,9 @@ def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True,
     df_census = load_census(BASE)
     if fix_pop:
         df_all = fix_population(df_all, df_census)
+    
+    if add_location:
+        df_all = preprocess.add_location(df_all, use_umap)
 
     if outlier:
         df_all = smooth_outlier(df_all)
@@ -326,62 +325,3 @@ def compare_submission(df_submission, filename):
     df_merged['smape'] = smape_arr(df_merged[mbd], df_merged['baseline'])
 
     return df_merged
-
-
-def test(df_all):
-    coordinates = df_all[['lng', 'lat']].values
-
-    # Encoding tricks
-    emb_size = 20
-    precision = 1e6
-
-    latlon = np.expand_dims(coordinates, axis=-1)
-
-    m = np.exp(np.log(precision)/emb_size)
-    angle_freq = m ** np.arange(emb_size)
-    angle_freq = angle_freq.reshape(1,1, emb_size)
-    latlon = latlon * angle_freq
-    latlon[..., 0::2] = np.cos(latlon[..., 0::2])
-
-    coordinates = list(zip(df_all['lat'], df_all['lng']))
-    results = rg.search(coordinates)
-    df_all['place'] = [x['admin2'] for x in results]
-
-    places = list(np.unique(df_all['county'].values))
-
-    def replace(x):
-        if x in places:
-            return x
-        
-        else:
-            return 'Other'
-        
-    df_all['place'] = df_all['place'].apply(lambda x: replace(x))
-
-    le = LabelEncoder()
-    df_all['place'] = le.fit_transform(df_all['place'])
-
-    pca = PCA().fit(coordinates)
-    df_all['pca_lat'] = pca.transform(coordinates)[:, 0]
-    df_all['pca_lon'] = pca.transform(coordinates)[:, 1]
-
-    umap = UMAP(n_components=2,
-            n_neighbors=50,
-            random_state=2023).fit(coordinates)
-
-    df_all['umap_lat'] = umap.transform(coordinates)[:, 0]
-    df_all['umap_lon'] = umap.transform(coordinates)[:, 1]
-
-    def rot(df):
-        for angle in [15, 30, 45]:
-            df[f'rot_{angle}_x'] = (np.cos(np.radians(angle)) * df['lat']) + \
-                                    (np.sin(np.radians(angle)) * df['lng'])
-            
-            df[f'rot_{angle}_y'] = (np.cos(np.radians(angle)) * df['lat']) - \
-                                    (np.sin(np.radians(angle)) * df['lng'])
-            
-        return df
-
-    df_all = rot(df_all)
-
-    return df_all

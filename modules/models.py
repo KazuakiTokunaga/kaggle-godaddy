@@ -73,7 +73,27 @@ def get_model(algo='lgb'):
         return VotingRegressor([
             ('xgb', xgb_model),
             ('lgb', lgb_model),
-            ('cat', cat_model)],weights=[3,1,3])
+            ('cat', cat_model)],weights=[3,1,3]
+        )
+    
+    elif algo=='cat ensemble':
+
+        cat_model2 = cat.CatBoostRegressor(
+            iterations=800,
+            loss_function="MAPE",
+            verbose=0,
+            grow_policy='SymmetricTree',
+            learning_rate=0.035,
+            max_depth=5,
+            l2_leaf_reg=0.2,
+            subsample=0.50,
+            max_bin=4096,
+        )
+
+        return VotingRegressor([
+            ('cat2', cat_model2),
+            ('cat', cat_model)],weights=[5,3]
+        )
 
 
 class LgbmBaseline():
