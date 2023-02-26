@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
 import pickle
-import reverse_geocoder as rg
 
-from sklearn.preprocessing import LabelEncoder
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
-from umap import UMAP
+# import reverse_geocoder as rg
+# from sklearn.preprocessing import LabelEncoder
+# from sklearn.decomposition import PCA
+# from sklearn.cluster import KMeans
+# from umap import UMAP
 
 
 
