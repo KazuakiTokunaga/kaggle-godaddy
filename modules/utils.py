@@ -187,13 +187,14 @@ def smooth_outlier(df_all, max_scale=40):
         tmp = df_all.loc[indices].copy().reset_index(drop=True)
         var = tmp.microbusiness_density.values.copy()
         
-        for i in range(max_scale, 0, -1):
-            thr = 0.20*np.mean(var[:i])
-            difa = abs(var[i]-var[i-1])
-            if (difa>=thr):
-                var[:i] *= (var[i]/var[i-1])
-                outliers.append(o)
-                cnt+=1
+        if o not in [28055, 48301]:
+            for i in range(max_scale, 0, -1):
+                thr = 0.20*np.mean(var[:i])
+                difa = abs(var[i]-var[i-1])
+                if (difa>=thr):
+                    var[:i] *= (var[i]/var[i-1])
+                    outliers.append(o)
+                    cnt+=1
         var[0] = var[1]*0.99
         df_all.loc[indices, mbd] = var
     
@@ -225,6 +226,7 @@ def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True,
     if add_location:
         df_all = preprocess.add_location(df_all, use_umap)
 
+    df_all['mbd_origin'] = df_all[mbd]
     if outlier:
         df_all = smooth_outlier(df_all)
     

@@ -13,7 +13,7 @@ from sklearn.pipeline import Pipeline
 mbd = 'microbusiness_density'
 
 
-def get_model(algo='lgb'):
+def get_model(algo='lgb', light=False):
 
     params = {
         'n_iter': 300,
@@ -29,6 +29,9 @@ def get_model(algo='lgb'):
         "seed": 42,
         'min_data_in_leaf': 213
     }
+
+    if light:
+        params['n_iter']=30
 
     lgb_model = lgb.LGBMRegressor(**params)
     
@@ -106,7 +109,8 @@ class LgbmBaseline():
         "blacklist": [],
         "blacklistcfips": [],
         "clip": (None, None),
-        "model": 'lgbm'
+        "model": 'lgbm',
+        "light": False,
     }):
 
         self.run_fold_name = run_fold_name
@@ -124,6 +128,7 @@ class LgbmBaseline():
         self.clip = params['clip']
         self.model = params['model']
         
+        self.light = params.get('light')
         self.save_path = save_path
         self.print_feature = False
         self.accum_cnt = 0
@@ -135,8 +140,8 @@ class LgbmBaseline():
             print(f'created df_all_dict[{i}]')
 
         self.df_all = self.df_all_dict[40]
-        self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'active', 'year','month', 'scale', 
-                                'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_trend', 'mbd_trend_multi', 'y_base', 'y_pred', 'smape']
+        self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'mbd_origin', 'active', 'year','month', 'scale', 
+                                'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_trend', 'mbd_trend_multi', 'y_base', 'y_pred', 'smape', 'smape_origin']
 
 
     def get_df_all_dict(self, train_times):
@@ -194,7 +199,7 @@ class LgbmBaseline():
         y_valid = df_valid.loc[valid_indices, target]
         
         # Create Model and predict.
-        model = get_model(algo=self.model)
+        model = get_model(algo=self.model, light=self.light)
         model.fit(X_train, y_train.clip(self.clip[0], self.clip[1]))
         y_pred = model.predict(X_valid)
         
@@ -225,7 +230,7 @@ class LgbmBaseline():
             df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_pred'] = df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_trend']
             df_valid.loc[~df_valid['mbd_trend'].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
 
-        #USE 
+        #USE TREND MULTI.
         c_name = 'mbd_trend_multi'
         df_valid[c_name] = np.nan
         if self.USE_TREND_MULTI:
@@ -234,9 +239,10 @@ class LgbmBaseline():
             
             df_valid[c_name] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
             df_valid.loc[~df_valid[c_name].isna(), 'mbd_pred'] = df_valid.loc[~df_valid[c_name].isna(), c_name]
-            df_valid.loc[~df_valid[c_name].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
+            df_valid.loc[~df_valid[c_name].isna(), 'y_pred'] = df_valid.loc['cfips'].map(trend_dict) - 1
         
-        df_valid['smape'] = utils.smape_arr(df_valid['microbusiness_density'], df_valid['mbd_pred'])
+        df_valid['smape'] = utils.smape_arr(df_valid[mbd], df_valid['mbd_pred'])
+        df_valid['smape_origin'] = utils.smape_arr(df_valid['mbd_origin'], df_valid['mbd_pred'])
         df_output = df_valid[self.output_features]
         
         return df_output
@@ -265,7 +271,7 @@ class LgbmBaseline():
             if scale:
                 df = df[df['scale'].isin(scale)]
 
-            output_array[pred_m-1] = df.groupby('scale')['smape'].mean().describe()[['mean', 'std']].to_numpy()
+            output_array[pred_m-1] = df.groupby('scale')['smape_origin'].mean().describe()[['mean', 'std']].to_numpy()
 
         dt_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
         dt_str = dt_now.strftime('%Y-%m-%d_%H:%M:%S')

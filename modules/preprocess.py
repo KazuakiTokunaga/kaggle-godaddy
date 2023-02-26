@@ -28,6 +28,7 @@ def add_lag_features(df_all, max_scale=40, USE_LAG=7):
     for i in range(1, USE_LAG+1):
         df_all[f'select_active_lag{i}'] = df_all.groupby('cfips')['active'].shift(i).bfill()
         df_all[f'select_mbd_lag{i}'] = df_all.groupby('cfips')[mbd].shift(i).bfill()
+        df_all[f'select_mbd_origin_lag{i}'] = df_all.groupby('cfips')['mbd_origin'].shift(i).bfill()
 
     for k in range(1, USE_LAG+1):
         df_all[f'select_active_lag1_diff{k}'] = df_all.groupby('cfips')[f'select_active_lag1'].diff(k)
@@ -42,7 +43,7 @@ def add_lag_features(df_all, max_scale=40, USE_LAG=7):
 
 
 def create_features(df_all, pred_m, train_times, USE_LAG = 5):
-    drop_features = [mbd, 'state', 'active', 'county', 'cfips', 'month', 'year']
+    drop_features = [mbd, 'mbd_origin', 'state', 'active', 'county', 'cfips', 'month', 'year']
     features = list(filter(lambda x: (not x.startswith('select_') and (x not in drop_features)),  df_all.columns.to_list()))
     features += list(filter(lambda x: (x.startswith(f'select_rate{pred_m}_')), df_all.columns.to_list()))
     features += list(filter(lambda x: (x.startswith(f'select_active_lag{pred_m}_diff')), df_all.columns.to_list()))
@@ -93,15 +94,16 @@ def get_trend_dict(df_all, train_time=40, n=3, thre=3, active_thre=25000,
     return df_trend, trend_dict
 
 
-def get_trend_multi(df_all, train_time=40, m_len=5, upper_bound=140, lower_bound=20, multi_can=[1.00, 1.002, 1.004]):
+def get_trend_multi(df_all, origin=False, train_time=40, m_len=5, upper_bound=140, lower_bound=20, multi_can=[1.00, 1.002, 1.004]):
 
+    target = 'mbd_origin' if origin else 'mbd'
     df_extract = df_all[(df_all['scale']<=train_time)&(df_all['scale']>=train_time-m_len)].copy()
     df_multi = df_extract[(df_extract[f'select_lastactive{train_time}']<=upper_bound)&(df_extract[f'select_lastactive{train_time}']>=lower_bound)].copy()
 
     mult_column_to_mult = {f'smape_{mult}': mult for mult in multi_can}
 
     for mult_column, mult in mult_column_to_mult.items():
-        df_multi['y_pred'] = df_multi['select_mbd_lag1'] * mult
+        df_multi['y_pred'] = df_multi[f'select_{target}_lag1'] * mult
         df_multi[mult_column] = utils.smape_arr(df_multi[mbd], df_multi['y_pred'])
         
     df_agg = df_multi.groupby('cfips')[list(mult_column_to_mult.keys())].mean().copy()
