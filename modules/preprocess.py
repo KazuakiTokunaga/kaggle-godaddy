@@ -36,7 +36,7 @@ def add_lag_features(df_all, max_scale=40, USE_LAG=7):
     for i in range(1, USE_LAG+1):
         df_all[f'select_rate1_lag{i}'] = df_all[f'select_rate1'].shift(i).bfill()
 
-    for c in [2,4,6,8,10]:
+    for c in [2,4,6,8,10,12]:
         df_all[f'select_rate1_rsum{c}'] = df_all.groupby('cfips')[f'select_rate1_lag1'].transform(lambda s: s.rolling(c, min_periods=1).sum())   
 
     return df_all
