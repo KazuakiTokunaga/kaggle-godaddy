@@ -6,7 +6,7 @@ from modules import utils
 from modules import models
 from modules import preprocess
 
-def main(BASE, external, params, fix_pop=True, use_umap=False, co_est=True):
+def main(BASE, external, params, trend_params, fix_pop=True, use_umap=False, co_est=True):
     mbd = 'microbusiness_density'
 
     df_train, df_test, df_subm = utils.load_dataset(BASE)
@@ -22,8 +22,8 @@ def main(BASE, external, params, fix_pop=True, use_umap=False, co_est=True):
         outlier=True
     )
 
-    instance_validation = models.LgbmBaseline('validation', df_subm, df_all, df_census, start_all_dict=32, save_path=False, params=params)
+    instance_validation = models.LgbmBaseline('validation', df_subm, df_all, df_census, start_all_dict=32, save_path=False, params=params, trend_params=trend_params)
     instance_validation.accum_validation()
 
-    instalce_prediction = models.LgbmBaseline('submission', df_subm, df_all, df_census, start_all_dict=40, save_path=False, params=params)
+    instalce_prediction = models.LgbmBaseline('submission', df_subm, df_all, df_census, start_all_dict=40, save_path=False, params=params, trend_params=trend_params)
     instalce_prediction.create_submission()
