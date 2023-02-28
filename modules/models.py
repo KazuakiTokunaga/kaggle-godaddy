@@ -128,6 +128,7 @@ class LgbmBaseline():
         "clip": (None, None),
         "model": 'lgbm',
         "light": False,
+        "max_window": 12,
     }):
 
         self.run_fold_name = run_fold_name
@@ -144,6 +145,7 @@ class LgbmBaseline():
         self.blacklistcfips = params['blacklistcfips']
         self.clip = params['clip']
         self.model = params['model']
+        self.max_window = params['max_window']
         
         self.light = params.get('light')
         self.save_path = save_path
@@ -153,7 +155,7 @@ class LgbmBaseline():
 
         self.df_all_dict = dict()
         for i in range(start_all_dict, 41):
-            self.df_all_dict[i] = preprocess.add_lag_features(df_all, max_scale=i, USE_LAG = self.USE_LAG)
+            self.df_all_dict[i] = preprocess.add_lag_features(df_all, max_scale=i, USE_LAG = self.USE_LAG, max_window=self.max_window)
             print(f'created df_all_dict[{i}]')
 
         self.df_all = self.df_all_dict[40]

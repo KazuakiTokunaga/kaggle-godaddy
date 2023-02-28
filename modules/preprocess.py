@@ -7,7 +7,7 @@ from modules import utils
 mbd = 'microbusiness_density'
 
 
-def add_lag_features(df_all, max_scale=40, USE_LAG=7):
+def add_lag_features(df_all, max_scale=40, USE_LAG=7, max_window=12):
     print(f'add lag features: max_scale={max_scale}')
 
     for i in range(30, max_scale+1):
@@ -36,7 +36,7 @@ def add_lag_features(df_all, max_scale=40, USE_LAG=7):
     for i in range(1, USE_LAG+1):
         df_all[f'select_rate1_lag{i}'] = df_all[f'select_rate1'].shift(i).bfill()
 
-    for c in [2,4,6,8,10,12]:
+    for c in [k for k in range(2, max_window+1, 2)]:
         df_all[f'select_rate1_rsum{c}'] = df_all.groupby('cfips')[f'select_rate1_lag1'].transform(lambda s: s.rolling(c, min_periods=1).sum())   
 
     return df_all
