@@ -332,7 +332,14 @@ def insert_trend(df_submission, df_all, df_census, trend_dict, fix_pop=True, met
     var_dict = df_extract[~df_extract['mbd_trend'].isna()].reset_index()[['cfips', 'mbd_trend']].set_index('cfips').to_dict()['mbd_trend']
     df_submission['trend'] = df_submission['cfips'].map(var_dict)
     idx = (~df_submission['trend'].isna())&(df_submission['month']=='2023-01-01')
-    df_submission.loc[idx, mbd] = df_submission.loc[idx, 'trend']
+    
+    if method=='replace':
+        df_submission.loc[idx, mbd] = df_submission.loc[idx, 'trend']
+    elif method=='mean':
+        df_submission.loc[idx, mbd] = (df_submission.loc[idx, 'trend'] + df_submission.loc[idx, mbd]) / 2
+    else:
+        raise Exception('Wrong Method.')
+
     df_submission = df_submission.drop(['trend', 'cfips', 'month'], axis=1).set_index('row_id')
         
     return df_submission, df_extract, var_dict

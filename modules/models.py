@@ -129,18 +129,101 @@ class LgbmBaseline():
         "model": 'lgbm',
         "light": False,
         "max_window": 12,
+    }, trend_params = {
+        "high_trend_params": {
+            1: {
+                'params':{
+                    'n':3,
+                    'thre':3,
+                    'thre_r':0,
+                    'lower_bound': 15000,
+                    'upper_bound': 999999,
+                    'use_regularize': True,
+                    'v_regularize': [0.01, 0.008],
+                    'v_clip':[0.999, 1.004]
+                },
+                'method': 'mean'
+            },
+            2: {
+                'params':{
+                    'n':4,
+                    'thre':4,
+                    'thre_r':0,
+                    'lower_bound': 15000,
+                    'upper_bound': 999999,
+                    'use_regularize': True,
+                    'v_regularize': [0.01, 0.008],
+                    'v_clip':[0.999, 1.004]
+                },
+                'method': 'mean'
+            },
+            3: {
+                'params':{
+                    'n':5,
+                    'thre':5,
+                    'thre_r':0,
+                    'lower_bound': 15000,
+                    'upper_bound': 999999,
+                    'use_regularize': True,
+                    'v_regularize': [0.01, 0.008],
+                    'v_clip':[0.999, 1.004]
+                },
+                'method': 'mean'
+            }
+        },
+        "low_trend_params": {
+            1: {
+                'params':{
+                    'n':3,
+                    'thre':3,
+                    'thre_r':0,
+                    'lower_bound': 60,
+                    'upper_bound': 140,
+                    'use_regularize': True,
+                    'v_regularize': [0.03, 0.02],
+                    'v_clip':[0.999, 1.004]
+                },
+                'method': 'replace'
+            },
+            2: {
+                'params':{
+                    'n':4,
+                    'thre':4,
+                    'thre_r':0,
+                    'lower_bound': 60,
+                    'upper_bound': 140,
+                    'use_regularize': True,
+                    'v_regularize': [0.03, 0.02],
+                    'v_clip':[0.999, 1.004]
+                },
+                'method': 'replace'
+            },
+            3: {
+                'params':{
+                    'n':5,
+                    'thre':5,
+                    'thre_r':0,
+                    'lower_bound': 60,
+                    'upper_bound': 140,
+                    'use_regularize': True,
+                    'v_regularize': [0.03, 0.02],
+                    'v_clip':[0.999, 1.004]
+                },
+                'method': 'replace'
+            }
+        }
     }):
 
         self.run_fold_name = run_fold_name
         self.df_subm = df_subm
         self.df_census = df_census
         self.output_dic = '../output/'
+        self.trend_params = trend_params
 
         self.act_thre = params['act_thre']
         self.abs_thre = params['abs_thre']
         self.USE_LAG = params['USE_LAG']
         self.USE_TREND = params['USE_TREND']
-        self.USE_TREND_MULTI = params['USE_TREND_MULTI']
         self.blacklist = params['blacklist']
         self.blacklistcfips = params['blacklistcfips']
         self.clip = params['clip']
@@ -160,7 +243,7 @@ class LgbmBaseline():
 
         self.df_all = self.df_all_dict[40]
         self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'mbd_origin', 'active', 'year','month', 'scale', 
-                                'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_trend', 'mbd_trend_multi', 'y_base', 'y_pred', 'smape', 'smape_origin']
+                                'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_high_trend', 'mbd_low_trend', 'y_base', 'y_pred', 'smape', 'smape_origin']
 
 
     def get_df_all_dict(self, train_times):
@@ -179,6 +262,7 @@ class LgbmBaseline():
             df_all_t = self.df_all
             df_merged = df_all_t.merge(r1[['row_id', 'mbd_pred']], how='left', on='row_id').set_index('row_id')
             df_merged.loc[~df_merged['mbd_pred'].isna(), mbd] = df_merged.loc[~df_merged['mbd_pred'].isna(), 'mbd_pred']
+            df_merged.loc[~df_merged['mbd_pred'].isna(), 'mbd_origin'] = df_merged.loc[~df_merged['mbd_pred'].isna(), mbd]
             df_merged.drop(['mbd_pred'], axis=1, inplace=True)
             
             idx = df_merged['scale']>last_exist_scale
@@ -241,24 +325,37 @@ class LgbmBaseline():
         df_valid.loc[lastvalue_indices, 'y_pred'] = df_valid.loc[lastvalue_indices, f'select_rate{pred_m}_lag{pred_m}']
         
         # USE Trend.
-        df_valid['mbd_trend'] = np.nan
-        if self.USE_TREND:
-            df_trend, trend_dict= preprocess.get_trend_dict(df_all, train_times)
-            print('# of cfips that have trend :', len(trend_dict))
-            df_valid['mbd_trend'] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
-            df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_pred'] = df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_trend']
-            df_valid.loc[~df_valid['mbd_trend'].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
+        df_valid['mbd_high_trend'] = np.nan
+        df_valid['mbd_low_trend'] = np.nan
 
-        #USE TREND MULTI.
-        c_name = 'mbd_trend_multi'
-        df_valid[c_name] = np.nan
-        if self.USE_TREND_MULTI:
-            trend_dict = preprocess.get_trend_multi(df_all, train_time = train_times, upper_bound=self.act_thre)
-            print('# of cfips that have trend multi:', len(trend_dict))
+        if self.USE_TREND:
+
+            for category in ['low', 'high']:
+                
+                # pass if trend params don't exist.
+                if not self.trend_params.get(f'{category}_trend_params').get(self.accum_cnt+1):
+                    continue
+
+                c_name = f'mbd_{category}_trend'
+                trend_params = self.trend_params.get(f'{category}_trend_params').get(self.accum_cnt+1).get('params')
+                trend_method = self.trend_params.get(f'{category}_trend_params').get(self.accum_cnt+1).get('method')
+
+                df_trend, trend_dict= preprocess.get_trend_dict(df_all, train_times, **trend_params)
+                print(f'# of cfips that have {category} trend :', len(trend_dict))
+                print('use method: ', trend_method)
+                df_valid[c_name] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
+
+                if trend_method=='replace':
+                    df_valid.loc[~df_valid[c_name].isna(), 'mbd_pred'] = df_valid.loc[~df_valid[c_name].isna(), c_name]
+                elif trend_method=='mean':
+                    idx = (~df_valid[c_name].isna())&(~df_valid['mbd_pred'].isna())
+                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, c_name] + df_valid.loc[idx, 'mbd_pred']) / 2
+                    idx = (~df_valid[c_name].isna())&(df_valid['mbd_pred'].isna())
+                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, c_name]
+                else:
+                    raise Exception('Wrong Trend Method.')
             
-            df_valid[c_name] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
-            df_valid.loc[~df_valid[c_name].isna(), 'mbd_pred'] = df_valid.loc[~df_valid[c_name].isna(), c_name]
-            df_valid.loc[~df_valid[c_name].isna(), 'y_pred'] = df_valid.loc['cfips'].map(trend_dict) - 1
+                df_valid.loc[~df_valid[c_name].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
         
         df_valid['smape'] = utils.smape_arr(df_valid[mbd], df_valid['mbd_pred'])
         df_valid['smape_origin'] = utils.smape_arr(df_valid['mbd_origin'], df_valid['mbd_pred'])
