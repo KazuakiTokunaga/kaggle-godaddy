@@ -50,14 +50,27 @@ def create_features(df_all, pred_m, train_times, USE_LAG = 5):
     
     return features
 
+def regularize(x, v):
+    if x >= 1:
+        if x * (1-v) > 1:
+            x *= (1-v)
+        else:
+            x = None
+    else:
+        if x * (1+v) < 1:
+            x *= (1+v)
+        else:
+            x = None
+    return x
 
-def get_trend_dict(df_all, train_time=40, n=3, thre=3, active_thre=25000, 
-                    regularize=True, v_regularize=0.003, v_clip=[0.995, 1.005]):
+
+def get_trend_dict(df_all, train_time=40, n=2, thre=2, thre_r = 0.002, lower_bound=20, upper_bound=140, 
+                    use_regularize=True, v_regularize=0.025, v_clip=[0.9975, 1.004]):
 
     dt = df_all.loc[df_all.scale==train_time].groupby('cfips')['active'].agg('last')
     df_all[f'select_lastactive{train_time}'] = df_all['cfips'].map(dt).astype(float)
 
-    idx = (df_all['scale']>= train_time-n)&(df_all['scale']<=train_time)&(df_all[f'select_lastactive{train_time}']>=active_thre)
+    idx = (df_all['scale']>= train_time-n)&(df_all['scale']<=train_time)&(df_all[f'select_lastactive{train_time}']>lower_bound)&(df_all[f'select_lastactive{train_time}']<=upper_bound)
     df_target_lag = df_all[idx].copy()
     for i in range(1, n+1):
         df_target_lag[f'lag_{i}'] = df_target_lag[mbd].shift(i)
@@ -75,8 +88,8 @@ def get_trend_dict(df_all, train_time=40, n=3, thre=3, active_thre=25000,
     df_target['down_cnt'] = 0
     df_target['mean'] = 0
     for i in range(1, n+1):
-        df_target['up_cnt'] += (df_target[f'rate{i}'] > 1)*1
-        df_target['down_cnt'] += (df_target[f'rate{i}']<1)*1
+        df_target['up_cnt'] += (df_target[f'rate{i}'] > (1+thre_r))*1
+        df_target['down_cnt'] += (df_target[f'rate{i}']< (1-thre_r))*1
         df_target['mean'] += df_target[f'rate{i}']
     df_target['mean'] /= n
 
@@ -84,7 +97,7 @@ def get_trend_dict(df_all, train_time=40, n=3, thre=3, active_thre=25000,
     df_target['trend'] = df_target[['down_cnt', 'mean', 'trend']].apply(lambda x: x[1] if x[0] >= thre and x[1]<1 else x[2], axis=1)
     
     if regularize:
-        df_target['trend'] = df_target['trend'].apply(utils.regularize, v=v_regularize)
+        df_target['trend'] = df_target['trend'].apply(regularize, v=v_regularize)
 
     df_trend = df_target[~df_target['trend'].isna()].copy()
 
@@ -94,10 +107,10 @@ def get_trend_dict(df_all, train_time=40, n=3, thre=3, active_thre=25000,
     return df_trend, trend_dict
 
 
-def get_trend_multi(df_all, origin=False, train_time=40, m_len=5, upper_bound=140, lower_bound=20, multi_can=[1.00, 1.002, 1.004]):
+def get_trend_multi(df_all, origin=False, train_time=40, m_len=3, upper_bound=140, lower_bound=20, multi_can=[1.00, 1.002, 1.004]):
 
     target = 'mbd_origin' if origin else 'mbd'
-    df_extract = df_all[(df_all['scale']<=train_time)&(df_all['scale']>=train_time-m_len)].copy()
+    df_extract = df_all[(df_all['scale']<=train_time)&(df_all['scale']>train_time-m_len)].copy()
     df_multi = df_extract[(df_extract[f'select_lastactive{train_time}']<=upper_bound)&(df_extract[f'select_lastactive{train_time}']>=lower_bound)].copy()
 
     mult_column_to_mult = {f'smape_{mult}': mult for mult in multi_can}
@@ -108,10 +121,11 @@ def get_trend_multi(df_all, origin=False, train_time=40, m_len=5, upper_bound=14
         
     df_agg = df_multi.groupby('cfips')[list(mult_column_to_mult.keys())].mean().copy()
     df_agg['best_mult'] = df_agg.idxmin(axis=1).map(mult_column_to_mult)
+    df_agg = df_agg[df_agg['best_mult']!=1.0]
 
     cfips_to_best_mult = dict(zip(df_agg.index, df_agg['best_mult']))
 
-    return cfips_to_best_mult
+    return cfips_to_best_mult, df_multi, mult_column_to_mult
 
 
 def add_location(df_all, use_umap=False):

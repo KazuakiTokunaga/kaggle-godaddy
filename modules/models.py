@@ -97,6 +97,23 @@ def get_model(algo='lgb', light=False):
             ('cat2', cat_model2),
             ('cat', cat_model)],weights=[5,3]
         )
+    
+    elif algo=='cat only':
+
+        cat_model3 = cat.CatBoostRegressor(
+            iterations=800,
+            loss_function="MAPE",
+            verbose=0,
+            grow_policy='SymmetricTree',
+            learning_rate=0.035,
+            colsample_bylevel=0.8,
+            max_depth=5,
+            l2_leaf_reg=0.2,
+            subsample=0.70,
+            max_bin=4096,
+        )
+
+        return cat_model3
 
 
 class LgbmBaseline():

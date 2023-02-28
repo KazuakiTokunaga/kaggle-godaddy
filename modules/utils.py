@@ -204,8 +204,52 @@ def smooth_outlier(df_all, max_scale=40):
     
     return df_all
 
+def merge_coest(df_all,  BASE='../input/'):
+
+    df_co_est = pd.read_csv(BASE + "co-est2021-alldata.csv", encoding='latin-1')
+    df_co_est["cfips"] = df_co_est.STATE*1000 + df_co_est.COUNTY
+    co_columns = [
+        'cfips',
+        'SUMLEV',
+        'DIVISION',
+        'ESTIMATESBASE2020',
+        'POPESTIMATE2020',
+        'POPESTIMATE2021',
+        'NPOPCHG2020',
+        'NPOPCHG2021',
+        'BIRTHS2020',
+        'BIRTHS2021',
+        'DEATHS2020',
+        'DEATHS2021',
+        'NATURALCHG2020',
+        'NATURALCHG2021',
+        'INTERNATIONALMIG2020',
+        'INTERNATIONALMIG2021',
+        'DOMESTICMIG2020',
+        'DOMESTICMIG2021',
+        'NETMIG2020',
+        'NETMIG2021',
+        'RESIDUAL2020',
+        'RESIDUAL2021',
+        'GQESTIMATESBASE2020',
+        'GQESTIMATES2020',
+        'GQESTIMATES2021',
+        'RBIRTH2021',
+        'RDEATH2021',
+        'RNATURALCHG2021',
+        'RINTERNATIONALMIG2021',
+        'RDOMESTICMIG2021',
+        'RNETMIG2021'
+    ]
+    df_all = df_all.reset_index()
+    df_all = df_all.merge(df_co_est[co_columns], on="cfips")
+    df_all = df_all.set_index('row_id')
+
+    return df_all
+
+
 def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, 
-                unemploy=True, outlier=False, coord=True, fix_pop=True, 
+                unemploy=True, outlier=False, coord=True, co_est=True, fix_pop=True, 
                 add_location=False, use_umap=False, categorize=False):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
@@ -218,6 +262,8 @@ def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True,
         df_all = merge_unemploy(df_all, BASE)
     if coord:
         df_all = merge_coord(df_all, BASE)
+    if co_est:
+        df_all = merge_coest(df_all, BASE)
 
     df_census = load_census(BASE)
     if fix_pop:
@@ -265,34 +311,31 @@ def load_pickle(filename):
     return res
 
 
-def regularize(x, v):
-    if x >= 1:
-        if x * (1-v) >= 1:
-            x *= (1-v)
-        else:
-            x = None
-    else:
-        if x * (1+v) <= 1:
-            x *= (1+v)
-        else:
-            x = None
-    return x
+def insert_trend(df_submission, df_all, df_census, trend_dict, fix_pop=True, method='replace'):
 
+    df_submission = df_submission.reset_index()
+    df_submission['cfips'] = df_submission['row_id'].apply(lambda x: int(x.split('_')[0]))
+    df_submission['month'] = df_submission['row_id'].apply(lambda x: x.split('_')[1])
 
-def insert_trend(df_sub_base, df_all, trend_dict, month_str='_2023-01-01', method='replace'):
+    target = 41
+    train = target - 1
 
-    for cfip in trend_dict:
-        row_id = str(cfip) + month_str
-    
-        if method=='replace':
-            df_sub_base.loc[row_id, :] = (trend_dict[cfip] * df_all.loc[(df_all['scale']==40)&(df_all['cfips']==cfip), mbd]).values[0]
-        elif method=='mean':
-            trend_values = (trend_dict[cfip] * df_all.loc[(df_all['scale']==38)&(df_all['cfips']==cfip), mbd]).values[0]
-            df_sub_base.loc[row_id, :] = (df_sub_base.loc[row_id].values[0] + trend_values) / 2
-        else:
-            raise Exception()
+    df_extract = df_all[df_all['scale']==train].copy()
+    df_extract['mbd_trend'] = df_extract['mbd_origin'] * df_extract['cfips'].map(trend_dict)
+    if fix_pop:
+        adult2020 = df_census.set_index('cfips')['adult_2020'].to_dict()
+        adult2021 = df_census.set_index('cfips')['adult_2021'].to_dict()
+        df_extract['adult2020'] = df_extract['cfips'].map(adult2020)
+        df_extract['adult2021'] = df_extract['cfips'].map(adult2021)
+        df_extract['mbd_trend'] = df_extract['mbd_trend'] * df_extract['adult2020'] / df_extract['adult2021']
+
+    var_dict = df_extract[~df_extract['mbd_trend'].isna()].reset_index()[['cfips', 'mbd_trend']].set_index('cfips').to_dict()['mbd_trend']
+    df_submission['trend'] = df_submission['cfips'].map(var_dict)
+    idx = (~df_submission['trend'].isna())&(df_submission['month']=='2023-01-01')
+    df_submission.loc[idx, mbd] = df_submission.loc[idx, 'trend']
+    df_submission = df_submission.drop(['trend', 'cfips', 'month'], axis=1).set_index('row_id')
         
-    return df_sub_base
+    return df_submission, df_extract, var_dict
 
 
 def adjust_population(df_submission, df_census):
