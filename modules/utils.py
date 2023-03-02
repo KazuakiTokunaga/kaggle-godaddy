@@ -176,29 +176,54 @@ def merge_coord(df_all, BASE='../input/'):
     return df_all
 
 
-def smooth_outlier(df_all, max_scale=40):
+def smooth_outlier(df_all, max_scale=40, method='v1'):
     print(f'smooth_outlier: max_scale={max_scale}')
     
     outliers = []
     cnt = 0
 
-    for o in df_all.cfips.unique():
-        indices = (df_all['cfips']==o)
-        tmp = df_all.loc[indices].copy().reset_index(drop=True)
-        var = tmp.microbusiness_density.values.copy()
-        
-        if o not in [28055, 48301]:
-            for i in range(max_scale, 0, -1):
-                thr = 0.20*np.mean(var[:i])
-                difa = abs(var[i]-var[i-1])
-                if (difa>=thr):
-                    var[:i] *= (var[i]/var[i-1])
-                    outliers.append(o)
-                    cnt+=1
-        var[0] = var[1]*0.99
-        df_all.loc[indices, mbd] = var
-    
+    if method=='v1':
+        for o in df_all.cfips.unique():
+            indices = (df_all['cfips']==o)
+            tmp = df_all.loc[indices].copy().reset_index(drop=True)
+            var = tmp.microbusiness_density.values.copy()
+            
+            if o not in [28055, 48301]:
+                for i in range(max_scale, 0, -1):
+                    thr = 0.20*np.mean(var[:i])
+                    difa = abs(var[i]-var[i-1])
+                    if (difa>=thr):
+                        var[:i] *= (var[i]/var[i-1])
+                        outliers.append(o)
+                        cnt+=1
+            var[0] = var[1]*0.99
+            df_all.loc[indices, mbd] = var
+
+    elif method=='v2':
+
+        for o in tqdm(df_all.cfips.unique()): 
+            indices = (df_all['cfips'] == o)  
+            tmp = df_all.loc[indices].copy().reset_index(drop=True)  
+            var = tmp.microbusiness_density.values.copy()
+            
+            if i not in [28055, 48301]:
+                for i in range(37, 2, -1):
+                    thr = 0.10 * np.mean(var[:i]) 
+                    difa = var[i] - var[i - 1] 
+                    if (difa >= thr) or (difa <= -thr):  
+                        if difa > 0:
+                            var[:i] += difa - 0.0045 
+                        else:
+                            var[:i] += difa + 0.0043 
+                        outliers.append(o)
+                        cnt+=1
+            var[0] = var[1] * 0.99
+            df_all.loc[indices, mbd] = var
+    else:
+        raise Exception('Wrong smoothing method.')
+
     outliers = np.unique(outliers)
+    print(f'used method: {method}')
     print(f'# of fixed cfips: {len(outliers)}')
     print(f'# of fixed value: {cnt}')
     
@@ -249,7 +274,7 @@ def merge_coest(df_all,  BASE='../input/'):
 
 
 def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, 
-                unemploy=True, outlier=False, coord=True, co_est=True, fix_pop=True, 
+                unemploy=True, outlier=False, outlier_method='v1', coord=True, co_est=True, fix_pop=True, 
                 add_location=False, use_umap=False, categorize=False):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
@@ -274,7 +299,7 @@ def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True,
 
     df_all['mbd_origin'] = df_all[mbd]
     if outlier:
-        df_all = smooth_outlier(df_all)
+        df_all = smooth_outlier(df_all, outlier_method)
     
     return df_all, df_census
 
