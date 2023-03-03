@@ -201,12 +201,12 @@ def smooth_outlier(df_all, max_scale=40, method='v1'):
 
     elif method=='v2':
 
-        for o in tqdm(df_all.cfips.unique()): 
+        for o in df_all.cfips.unique(): 
             indices = (df_all['cfips'] == o)  
             tmp = df_all.loc[indices].copy().reset_index(drop=True)  
             var = tmp.microbusiness_density.values.copy()
             
-            if i not in [28055, 48301]:
+            if o not in [28055, 48301]:
                 for i in range(37, 2, -1):
                     thr = 0.10 * np.mean(var[:i]) 
                     difa = var[i] - var[i - 1] 
@@ -299,7 +299,7 @@ def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True,
 
     df_all['mbd_origin'] = df_all[mbd]
     if outlier:
-        df_all = smooth_outlier(df_all, outlier_method)
+        df_all = smooth_outlier(df_all, method=outlier_method)
     
     return df_all, df_census
 
@@ -402,3 +402,24 @@ def compare_submission(df_submission, filename):
     df_merged['smape'] = smape_arr(df_merged[mbd], df_merged['baseline'])
 
     return df_merged
+
+
+# まだ間違っていそう
+def merge_scale41(df_all, df_submission, df_census):
+    
+    df_all = df_all.reset_index()
+    
+    df_submission = df_submission.reset_index().rename(columns={mbd: 'mbd_pred'})
+    df_all = df_all.merge(df_submission, how='left', on='row_id')
+    
+    idx = ~df_all['mbd_pred'].isna()
+    df_all.loc[idx, mbd] = df_all.loc[idx, 'mbd_pred']
+    
+    adult2020 = df_census.set_index('cfips')['adult_2020'].to_dict()
+    df_all['adult2020'] = df_submission['cfips'].map(adult2020)
+    df_all.loc[idx, mbd] = df_all.loc[idx, 'mbd_pred'] * df_all.loc[idx, 'adult2020']
+
+    df_all = df_all.drop(['mbd_pred', 'adult2020'], axis=1)
+
+    return df_all
+    
