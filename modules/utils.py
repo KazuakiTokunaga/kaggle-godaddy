@@ -303,7 +303,7 @@ def merge_coest(df_all,  BASE='../input/'):
 
 def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, 
                 unemploy=True, outlier=False, outlier_method='v1', coord=True, co_est=True, fix_pop=True, 
-                add_location=False, use_umap=False, categorize=False):
+                add_location=False, use_umap=False, categorize=False, merge41=False, df_subm=''):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
 
@@ -328,6 +328,9 @@ def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True,
     df_all['mbd_origin'] = df_all[mbd]
     if outlier:
         df_all = smooth_outlier(df_all, method=outlier_method)
+
+    if merge41:
+        df_all = merge_scale41(df_all, df_subm, df_census)
     
     return df_all, df_census
 
@@ -398,16 +401,19 @@ def insert_trend(df_submission, df_all, df_census, trend_dict, fix_pop=True, met
     return df_submission, df_extract, var_dict
 
 
-def adjust_population(df_submission, df_census):
+def adjust_population(df_submission, df_census, start_month='2023-02-01'):
 
     df_submission = df_submission.reset_index()
     df_submission['cfips'] = df_submission['row_id'].apply(lambda x: int(x.split('_')[0]))
+    df_submission['month'] = df_submission['row_id'].apply(lambda x: x.split('_')[1])
     adult2020 = df_census.set_index('cfips')['adult_2020'].to_dict()
     adult2021 = df_census.set_index('cfips')['adult_2021'].to_dict()
     df_submission['adult2020'] = df_submission['cfips'].map(adult2020)
     df_submission['adult2021'] = df_submission['cfips'].map(adult2021)
-    df_submission[mbd] = df_submission[mbd] * df_submission['adult2020'] / df_submission['adult2021']
-    df_submission = df_submission.drop(['adult2020','adult2021','cfips'],axis=1)
+
+    idx = (df_submission['month']>=start_month)
+    df_submission.loc[idx, mbd] = df_submission.loc[idx, mbd] * df_submission.loc[idx, 'adult2020'] / df_submission.loc[idx, 'adult2021']
+    df_submission = df_submission.drop(['adult2020','adult2021','cfips', 'month'],axis=1)
     df_submission = df_submission.set_index('row_id')
 
     return df_submission

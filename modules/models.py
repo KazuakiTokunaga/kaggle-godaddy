@@ -58,7 +58,19 @@ def get_model(algo='lgb', light=False):
         subsample=0.50,
         max_bin=4096,
     )
-    
+
+    cat_model2 = cat.CatBoostRegressor(
+        iterations=2000,
+        loss_function="MAPE",
+        verbose=0,
+        grow_policy='SymmetricTree',
+        learning_rate=0.035,
+        colsample_bylevel=0.8,
+        max_depth=5,
+        l2_leaf_reg=0.2,
+        subsample=0.70,
+        max_bin=4096,
+    )
 
     if algo=='lgb':
         
@@ -78,20 +90,17 @@ def get_model(algo='lgb', light=False):
             ('lgb', lgb_model),
             ('cat', cat_model)],weights=[3,1,3]
         )
+
+    elif algo=='tuned_ensemble':
+
+        print('use ensemble.')
+        return VotingRegressor([
+            ('xgb', xgb_model),
+            ('lgb', lgb_model),
+            ('cat', cat_model2)],weights=[3,1,3]
+        )
     
     elif algo=='cat ensemble':
-
-        cat_model2 = cat.CatBoostRegressor(
-            iterations=800,
-            loss_function="MAPE",
-            verbose=0,
-            grow_policy='SymmetricTree',
-            learning_rate=0.035,
-            max_depth=5,
-            l2_leaf_reg=0.2,
-            subsample=0.50,
-            max_bin=4096,
-        )
 
         return VotingRegressor([
             ('cat2', cat_model2),
@@ -100,20 +109,7 @@ def get_model(algo='lgb', light=False):
     
     elif algo=='cat only':
 
-        cat_model3 = cat.CatBoostRegressor(
-            iterations=800,
-            loss_function="MAPE",
-            verbose=0,
-            grow_policy='SymmetricTree',
-            learning_rate=0.035,
-            colsample_bylevel=0.8,
-            max_depth=5,
-            l2_leaf_reg=0.2,
-            subsample=0.70,
-            max_bin=4096,
-        )
-
-        return cat_model3
+        return cat_model2
 
 
 class LgbmBaseline():
@@ -243,7 +239,7 @@ class LgbmBaseline():
             self.df_all_dict[i] = preprocess.add_lag_features(df_all, max_scale=i, USE_LAG = self.USE_LAG, max_window=self.max_window)
             print(f'created df_all_dict[{i}]')
 
-        self.df_all = self.df_all_dict[40]
+        self.df_all = self.df_all_dict[self.start_max_scale]
         self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'mbd_origin', 'active', 'year','month', 'scale', 
                                 'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_high_trend', 'mbd_low_trend', 'y_base', 'y_pred', 'smape', 'smape_origin']
 
@@ -271,7 +267,7 @@ class LgbmBaseline():
             df_merged.loc[idx, 'active'] =  (df_merged.loc[idx, f'select_lastactive{last_exist_scale}'] / df_merged.loc[idx, f'select_lastmbd{last_exist_scale}']) * df_merged.loc[idx, mbd]
             df_merged.loc[df_merged['active'].isna(), 'active'] = 0
 
-            df_all_t = preprocess.add_lag_features(df_merged, max_scale=i, USE_LAG=self.USE_LAG)
+            df_all_t = preprocess.add_lag_features(df_merged, max_scale=i, USE_LAG=self.USE_LAG, max_window=self.max_window)
             
             self.df_all_dict[i] = df_all_t
 
@@ -483,7 +479,10 @@ class LgbmBaseline():
         df_submission = df_merged[mbd]
 
         # 人口分だけ補正
-        df_submission = utils.adjust_population(df_submission, self.df_census)
+        if self.start_max_scale==41: # 1月分は補正不要
+            df_submission = utils.adjust_population(df_submission, self.df_census, start_month='2023-02-01')
+        else:
+            df_submission = utils.adjust_population(df_submission, self.df_census)
         
         dt_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
         dt_str = dt_now.strftime('%Y-%m-%d_%H:%M:%S')
