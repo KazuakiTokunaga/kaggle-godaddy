@@ -129,6 +129,7 @@ class LgbmBaseline():
         "model": 'lgbm',
         "light": False,
         "max_window": 12,
+        "start_max_scale": 40
     }, trend_params = {
         "high_trend_params": {
             1: {
@@ -229,7 +230,8 @@ class LgbmBaseline():
         self.clip = params['clip']
         self.model = params['model']
         self.max_window = params['max_window']
-        
+        self.start_max_scale = params.get('start_max_scale') if params.get('start_max_scale') else 40
+
         self.light = params.get('light')
         self.save_path = save_path
         self.print_feature = False
@@ -237,7 +239,7 @@ class LgbmBaseline():
         self.output_dic = dict()
 
         self.df_all_dict = dict()
-        for i in range(start_all_dict, 41):
+        for i in range(start_all_dict, self.start_max_scale+1):
             self.df_all_dict[i] = preprocess.add_lag_features(df_all, max_scale=i, USE_LAG = self.USE_LAG, max_window=self.max_window)
             print(f'created df_all_dict[{i}]')
 

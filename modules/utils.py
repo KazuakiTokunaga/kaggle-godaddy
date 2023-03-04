@@ -56,11 +56,16 @@ def get_df_all(df_train, df_test, categorize=False):
     
     return df_all
 
-def load_dataset(BASE = '../input/'):
+def load_dataset(BASE = '../input/', subm=''):
 
     df_train = pd.read_csv(BASE + 'train.csv',  index_col='row_id')
     df_test = pd.read_csv(BASE + 'test.csv',  index_col='row_id')
-    df_subm = pd.read_csv(BASE + 'sample_submission.csv',  index_col='row_id')
+    
+    if subm:
+        df_subm = pd.read_csv(subm,  index_col='row_id')
+    else:
+        df_subm = pd.read_csv(BASE + 'sample_submission.csv',  index_col='row_id')
+
     df_revealed_test = pd.read_csv(BASE + 'revealed_test.csv', index_col='row_id')
 
     df_train = df_train[~(df_train['first_day_of_month']>='2022-11-01')]
@@ -183,6 +188,7 @@ def smooth_outlier(df_all, max_scale=40, method='v1'):
     cnt = 0
 
     if method=='v1':
+        
         for o in df_all.cfips.unique():
             indices = (df_all['cfips']==o)
             tmp = df_all.loc[indices].copy().reset_index(drop=True)
@@ -219,6 +225,28 @@ def smooth_outlier(df_all, max_scale=40, method='v1'):
                         cnt+=1
             var[0] = var[1] * 0.99
             df_all.loc[indices, mbd] = var
+
+    elif method=='v3':
+
+        for o in df_all.cfips.unique(): 
+            indices = (df_all['cfips'] == o)  
+            tmp = df_all.loc[indices].copy().reset_index(drop=True)  
+            var = tmp.microbusiness_density.values.copy()
+            
+            if o not in [28055, 48301]:
+                for i in range(37, 2, -1):
+                    thr = 0.10 * np.mean(var[:i]) 
+                    difa = var[i] - var[i - 1] 
+                    if (difa >= thr) or (difa <= -thr):  
+                        if difa > 0:
+                            var[:i] += difa - 0.003
+                        else:
+                            var[:i] += difa + 0.003 
+                        outliers.append(o)
+                        cnt+=1
+            var[0] = var[1] * 0.99
+            df_all.loc[indices, mbd] = var
+
     else:
         raise Exception('Wrong smoothing method.')
 
@@ -404,22 +432,24 @@ def compare_submission(df_submission, filename):
     return df_merged
 
 
-# まだ間違っていそう
 def merge_scale41(df_all, df_submission, df_census):
     
     df_all = df_all.reset_index()
     
-    df_submission = df_submission.reset_index().rename(columns={mbd: 'mbd_pred'})
-    df_all = df_all.merge(df_submission, how='left', on='row_id')
+    df_subt = df_submission.copy().reset_index().rename(columns={mbd: 'mbd_pred'})
+    df_subt['month'] = df_subt['row_id'].apply(lambda x: x.split('_')[1])
+    df_subt = df_subt[df_subt['month']=='2023-01-01']    
+    df_all = df_all.merge(df_subt.drop(['month'], axis=1), how='left', on='row_id')
     
     idx = ~df_all['mbd_pred'].isna()
     df_all.loc[idx, mbd] = df_all.loc[idx, 'mbd_pred']
     
     adult2020 = df_census.set_index('cfips')['adult_2020'].to_dict()
-    df_all['adult2020'] = df_submission['cfips'].map(adult2020)
-    df_all.loc[idx, mbd] = df_all.loc[idx, 'mbd_pred'] * df_all.loc[idx, 'adult2020']
+    df_all['adult2020'] = df_all['cfips'].map(adult2020)
+    df_all.loc[idx, 'active'] = np.round(df_all.loc[idx, 'mbd_pred'] * df_all.loc[idx, 'adult2020'] / 100)
+    df_all.loc[idx, 'mbd_origin'] = df_all.loc[idx, mbd]
 
-    df_all = df_all.drop(['mbd_pred', 'adult2020'], axis=1)
+    df_all = df_all.drop(['mbd_pred', 'adult2020'], axis=1).set_index('row_id')
 
     return df_all
     
