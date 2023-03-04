@@ -8,11 +8,11 @@ from modules import preprocess
 
 def main(BASE, external, params, trend_params, add_location=True, coord=True,
         fix_pop=True, use_umap=False, co_est=True, outlier=True, outlier_method='v1', census=True,
-        merge41=False, df_subm='/kaggle/input/godaddymy/submission_13769_trend.csv'):
+        merge41=False, subm='/kaggle/input/godaddymy/submission_13769_trend.csv'):
 
     mbd = 'microbusiness_density'
 
-    df_train, df_test, df_subm = utils.load_dataset(BASE, df_subm=df_subm)
+    df_train, df_test, df_subm = utils.load_dataset(BASE, subm)
     df_all, df_census = utils.merge_dataset(df_train, df_test, 
         BASE=external, 
         unemploy=False, 
