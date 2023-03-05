@@ -126,7 +126,9 @@ class LgbmBaseline():
         "model": 'lgbm',
         "light": False,
         "max_window": 12,
-        "start_max_scale": 40
+        "start_max_scale": 40,
+        "start_all_dict": 32,
+        "smooth_method": 'v3'
     }, trend_params = {
         "high_trend_params": {
             1: {
@@ -228,6 +230,8 @@ class LgbmBaseline():
         self.model = params['model']
         self.max_window = params['max_window']
         self.start_max_scale = params.get('start_max_scale') if params.get('start_max_scale') else 40
+        self.smooth_method = params.get('smooth_method') if params.get('smooth_method') else 'v3'
+        self.start_all_dict = params.get('start_all_dict') if params.get('start_all_dict') else 32
 
         self.light = params.get('light')
         self.save_path = save_path
@@ -236,18 +240,31 @@ class LgbmBaseline():
         self.output_dic = dict()
 
         self.df_all_dict = dict()
-        print(f'create df_all_dict[{self.start_max_scale}]')
-        self.df_all_dict[self.start_max_scale] = preprocess.add_lag_features(df_all, max_scale=self.start_max_scale, USE_LAG = self.USE_LAG, max_window=self.max_window)
+        self.df_all_dict_original = dict()
+        for i in range(self.start_all_dict, self.start_max_scale+1):
+            print(f'create df_all_dict[{i}] and df_all_dict_original[{i}]')
+            self.df_all_dict[i] = preprocess.add_lag_features(
+                df_all, 
+                max_scale=i, 
+                USE_LAG = self.USE_LAG, 
+                max_window=self.max_window,
+                smooth=True,
+                smooth_method=self.smooth_method
+                )
+            self.df_all_dict_original[i] = self.df_all_dict[i]
+
         self.df_all = self.df_all_dict[self.start_max_scale]
     
         self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'mbd_origin', 'active', 'year','month', 'scale', 
                                 'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_high_trend', 'mbd_low_trend', 'y_base', 'y_pred', 'smape', 'smape_origin']
 
 
-    def get_df_all_dict(self, train_times):
+    def get_df_all_dict(self, train_times, smooth=False):
         
         for i in train_times:
-            print(f'create df_all_dict[{i}].')
+            last_exist_scale = i - self.accum_cnt
+            
+            print(f'create df_all_dict[{i}] with {self.accum_cnt} predicted months from df_all_dict_original[{last_exist_scale}].')
             output1 = self.output_dic[self.accum_cnt]
             r1 = output1[output1['scale']==i].reset_index()
             for c in range(1, self.accum_cnt):
@@ -255,9 +272,7 @@ class LgbmBaseline():
                 r2 = output2[output2['scale']==i-c].reset_index()
                 r1 = pd.concat([r1, r2])
             
-            last_exist_scale = i - self.accum_cnt
-
-            df_all_t = self.df_all
+            df_all_t = self.df_all_dict_original[i - self.accum_cnt]
             df_merged = df_all_t.merge(r1[['row_id', 'mbd_pred']], how='left', on='row_id').set_index('row_id')
             print('insert mbd and mbd_origin of scale:', df_merged.loc[~df_merged['mbd_pred'].isna(), 'scale'].unique())
             df_merged.loc[~df_merged['mbd_pred'].isna(), mbd] = df_merged.loc[~df_merged['mbd_pred'].isna(), 'mbd_pred']
@@ -268,7 +283,13 @@ class LgbmBaseline():
             df_merged.loc[idx, 'active'] =  (df_merged.loc[idx, f'select_lastactive{last_exist_scale}'] / df_merged.loc[idx, f'select_lastmbd{last_exist_scale}']) * df_merged.loc[idx, mbd]
             df_merged.loc[df_merged['active'].isna(), 'active'] = 0
 
-            df_all_t = preprocess.add_lag_features(df_merged, max_scale=i, USE_LAG=self.USE_LAG, max_window=self.max_window)
+            df_all_t = preprocess.add_lag_features(df_merged, 
+                max_scale=i, 
+                USE_LAG=self.USE_LAG, 
+                max_window=self.max_window,
+                smooth=smooth, 
+                smooth_method=self.smooth_method
+            )
             
             self.df_all_dict[i] = df_all_t
 
@@ -281,12 +302,8 @@ class LgbmBaseline():
         print('pred_m: ', pred_m)
         print('train_times: ', train_times)
 
-        if self.accum_cnt:
-            print(f'use df_all_dict[{train_times}]')
-            df_all = self.df_all_dict[train_times]
-        else:
-            print(f'use original df_all')
-            df_all = self.df_all
+        print(f'use df_all_dict[{train_times}]')
+        df_all = self.df_all_dict[train_times]
 
         target = f'select_rate{pred_m}'
         features = preprocess.create_features(df_all, pred_m, train_times, self.USE_LAG)
@@ -414,7 +431,7 @@ class LgbmBaseline():
 
         self.accum_cnt = accum_cnt
         if accum_cnt:
-            self.get_df_all_dict(list(range(max_month-m_len, max_month)))
+            self.get_df_all_dict(list(range(max_month-m_len, max_month)), smooth=False)
             print('success in updating df_all_dict')
         
         if not out_idx:

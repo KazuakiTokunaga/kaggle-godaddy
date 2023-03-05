@@ -7,7 +7,7 @@ from modules import models
 from modules import preprocess
 
 def main(BASE, external, params, trend_params, validate=True, add_location=True, coord=True,
-        fix_pop=True, use_umap=False, co_est=True, outlier=True, outlier_method='v1', census=True,
+        fix_pop=True, use_umap=False, co_est=True, census=True,
         merge41=False, subm='/kaggle/input/godaddymy/submission_13769_trend.csv'):
 
     mbd = 'microbusiness_density'
@@ -22,8 +22,6 @@ def main(BASE, external, params, trend_params, validate=True, add_location=True,
         co_est=co_est,
         add_location=add_location, 
         use_umap=use_umap, 
-        outlier=outlier,
-        outlier_method=outlier_method,
         merge41=merge41,
         df_subm=df_subm
     )

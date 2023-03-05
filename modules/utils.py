@@ -213,7 +213,7 @@ def smooth_outlier(df_all, max_scale=40, method='v1'):
             var = tmp.microbusiness_density.values.copy()
             
             if o not in [28055, 48301]:
-                for i in range(37, 2, -1):
+                for i in range(max_scale-3, 2, -1):
                     thr = 0.10 * np.mean(var[:i]) 
                     difa = var[i] - var[i - 1] 
                     if (difa >= thr) or (difa <= -thr):  
@@ -234,7 +234,7 @@ def smooth_outlier(df_all, max_scale=40, method='v1'):
             var = tmp.microbusiness_density.values.copy()
             
             if o not in [28055, 48301]:
-                for i in range(37, 2, -1):
+                for i in range(max_scale-3, 2, -1):
                     thr = 0.10 * np.mean(var[:i]) 
                     difa = var[i] - var[i - 1] 
                     if (difa >= thr) or (difa <= -thr):  
@@ -248,7 +248,7 @@ def smooth_outlier(df_all, max_scale=40, method='v1'):
             df_all.loc[indices, mbd] = var
 
     else:
-        raise Exception('Wrong smoothing method.')
+        print('No smooth.')
 
     outliers = np.unique(outliers)
     print(f'used method: {method}')
@@ -302,7 +302,7 @@ def merge_coest(df_all,  BASE='../input/'):
 
 
 def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, 
-                unemploy=True, outlier=False, outlier_method='v1', coord=True, co_est=True, fix_pop=True, 
+                unemploy=True, coord=True, co_est=True, fix_pop=True, 
                 add_location=False, use_umap=False, categorize=False, merge41=False, df_subm=''):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize)
@@ -325,13 +325,10 @@ def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True,
     if add_location:
         df_all = preprocess.add_location(df_all, use_umap)
 
-    df_all['mbd_origin'] = df_all[mbd]
-    if outlier:
-        df_all = smooth_outlier(df_all, method=outlier_method)
-
     if merge41:
         df_all = merge_scale41(df_all, df_subm, df_census)
-    
+
+    df_all['mbd_origin'] = df_all[mbd]    
     return df_all, df_census
 
 
