@@ -10,6 +10,9 @@ mbd = 'microbusiness_density'
 def add_lag_features(df_all, max_scale=40, USE_LAG=7, max_window=12, smooth=False, smooth_method='v3'):
     print(f'add lag features: max_scale={max_scale}')
 
+    if smooth:
+        df_all = utils.smooth_outlier(df_all, max_scale=max_scale, method=smooth_method)
+
     for i in range(30, max_scale+1):
         dt = df_all.loc[df_all.scale==i].groupby('cfips')['active'].agg('last')
         df_all[f'select_lastactive{i}'] = df_all['cfips'].map(dt).astype(float)
@@ -38,9 +41,6 @@ def add_lag_features(df_all, max_scale=40, USE_LAG=7, max_window=12, smooth=Fals
 
     for c in [k for k in range(2, max_window+1, 2)]:
         df_all[f'select_rate1_rsum{c}'] = df_all.groupby('cfips')[f'select_rate1_lag1'].transform(lambda s: s.rolling(c, min_periods=1).sum())   
-    
-    if smooth:
-        df_all = utils.smooth_outlier(df_all, max_scale=max_scale, method=smooth_method)
 
     return df_all
 

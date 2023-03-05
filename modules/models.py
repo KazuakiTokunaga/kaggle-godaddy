@@ -1,6 +1,7 @@
 import datetime
 import pandas as pd
 import numpy as np
+import pickle
 
 from sklearn.ensemble import VotingRegressor
 import lightgbm as lgb
@@ -128,7 +129,8 @@ class LgbmBaseline():
         "max_window": 12,
         "start_max_scale": 40,
         "start_all_dict": 32,
-        "smooth_method": 'v3'
+        "smooth_method": 'v3',
+        "save_output_dic": False
     }, trend_params = {
         "high_trend_params": {
             1: {
@@ -232,6 +234,7 @@ class LgbmBaseline():
         self.start_max_scale = params.get('start_max_scale') if params.get('start_max_scale') else 40
         self.smooth_method = params.get('smooth_method') if params.get('smooth_method') else 'v3'
         self.start_all_dict = params.get('start_all_dict') if params.get('start_all_dict') else 32
+        self.save_output_dic = params.get('save_output_dic') if params.get('save_output_dic') else False
 
         self.light = params.get('light')
         self.save_path = save_path
@@ -422,6 +425,15 @@ class LgbmBaseline():
             df.to_csv(f'../output/{name}.csv')
         else:
             df.to_csv(f'{name}.csv')
+        
+        if self.save_output_dic:
+            if self.save_path:
+                utils.save_pickle(self.output_dic, f'{name}')
+            else:
+                save_path = f'{filename}.pickle'
+                with open(save_path, 'wb') as f:
+                    pickle.dump(self.output_dic, f)
+            print(f'saved {name}.pickle')
 
         print(f'saved output/{name}.csv')
 
