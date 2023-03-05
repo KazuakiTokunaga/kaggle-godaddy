@@ -180,13 +180,13 @@ def merge_coord(df_all, BASE='../input/'):
 
     return df_all
 
-
-def smooth_outlier(df_all, max_scale=40, method='v1'):
+def smooth_outlier(df_all_base, max_scale=40, method='v1'):
     print(f'smooth_outlier: max_scale={max_scale}')
     
     outliers = []
     cnt = 0
 
+    df_all = df_all_base.copy()
     if method=='v1':
         
         for o in df_all.cfips.unique():
