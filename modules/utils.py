@@ -24,7 +24,7 @@ def smape_arr(y_true, y_pred):
     return smap
 
 
-def get_df_all(df_train, df_test, categorize=False):
+def get_df_all(df_train, df_test, categorize=False, county=True):
 
     state_dict = df_train[['cfips', 'state', 'county']]
     state_dict = state_dict.set_index('cfips')
@@ -47,7 +47,9 @@ def get_df_all(df_train, df_test, categorize=False):
     df_all = df_all.drop(columns='first_day_of_month')
     df_all.sort_index(inplace=True)
 
-    df_all['county'] = (df_all['county'] + df_all['state']).factorize()[0]
+    if county:
+        df_all['county'] = (df_all['county'] + df_all['state']).factorize()[0]
+    
     df_all['state_i'] = df_all['state'].factorize()[0]
 
     if categorize:
@@ -301,11 +303,11 @@ def merge_coest(df_all,  BASE='../input/'):
     return df_all
 
 
-def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, 
+def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, county=True,
                 unemploy=True, coord=True, co_est=True, fix_pop=True, 
                 add_location=False, use_umap=False, categorize=False, merge41=False, df_subm=''):
 
-    df_all = get_df_all(df_train, df_test, categorize=categorize)
+    df_all = get_df_all(df_train, df_test, categorize=categorize, county=county)
 
     if pop:
         df_all = merge_pop(df_all, BASE)
