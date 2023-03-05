@@ -401,7 +401,7 @@ def insert_trend(df_submission, df_all, df_census, trend_dict, fix_pop=True, met
     return df_submission, df_extract, var_dict
 
 
-def adjust_population(df_submission, df_census, start_month='2023-02-01'):
+def adjust_population(df_submission, df_census, start_month='2023-01-01'):
 
     df_submission = df_submission.reset_index()
     df_submission['cfips'] = df_submission['row_id'].apply(lambda x: int(x.split('_')[0]))

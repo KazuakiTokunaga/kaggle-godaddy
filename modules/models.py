@@ -259,6 +259,7 @@ class LgbmBaseline():
 
             df_all_t = self.df_all
             df_merged = df_all_t.merge(r1[['row_id', 'mbd_pred']], how='left', on='row_id').set_index('row_id')
+            print('insert mbd and mbd_origin of scale:', df_merged.loc[~df_merged['mbd_pred'].isna(), 'scale'].unique())
             df_merged.loc[~df_merged['mbd_pred'].isna(), mbd] = df_merged.loc[~df_merged['mbd_pred'].isna(), 'mbd_pred']
             df_merged.loc[~df_merged['mbd_pred'].isna(), 'mbd_origin'] = df_merged.loc[~df_merged['mbd_pred'].isna(), mbd]
             df_merged.drop(['mbd_pred'], axis=1, inplace=True)
