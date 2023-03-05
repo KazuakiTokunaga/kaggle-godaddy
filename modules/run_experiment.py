@@ -6,7 +6,7 @@ from modules import utils
 from modules import models
 from modules import preprocess
 
-def main(BASE, external, params, trend_params, add_location=True, coord=True,
+def main(BASE, external, params, trend_params, validate=True, add_location=True, coord=True,
         fix_pop=True, use_umap=False, co_est=True, outlier=True, outlier_method='v1', census=True,
         merge41=False, subm='/kaggle/input/godaddymy/submission_13769_trend.csv'):
 
@@ -28,8 +28,9 @@ def main(BASE, external, params, trend_params, add_location=True, coord=True,
         df_subm=df_subm
     )
 
-    instance_validation = models.LgbmBaseline('validation', df_subm, df_all, df_census, start_all_dict=32, save_path=False, params=params, trend_params=trend_params)
-    instance_validation.accum_validation()
+    if validate:
+        instance_validation = models.LgbmBaseline('validation', df_subm, df_all, df_census, start_all_dict=32, save_path=False, params=params, trend_params=trend_params)
+        instance_validation.accum_validation()
 
     if merge41:
         instalce_prediction = models.LgbmBaseline('submission', df_subm, df_all, df_census, start_all_dict=40, save_path=False, params=params, trend_params=trend_params)

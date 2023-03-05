@@ -109,12 +109,13 @@ def get_model(algo='lgb', light=False):
     
     elif algo=='cat only':
 
+        print('use tuned_catboost')
         return cat_model2
 
 
 class LgbmBaseline():
 
-    def __init__(self, run_fold_name, df_subm, df_all, df_census, start_all_dict, save_path=True, params={
+    def __init__(self, run_fold_name, df_subm, df_all, df_census, save_path=True, params={
         "act_thre": 2.00,
         "abs_thre": 1.00,
         "USE_LAG": 5,
@@ -235,11 +236,10 @@ class LgbmBaseline():
         self.output_dic = dict()
 
         self.df_all_dict = dict()
-        for i in range(start_all_dict, self.start_max_scale+1):
-            self.df_all_dict[i] = preprocess.add_lag_features(df_all, max_scale=i, USE_LAG = self.USE_LAG, max_window=self.max_window)
-            print(f'created df_all_dict[{i}]')
-
+        print(f'create df_all_dict[{self.start_max_scale}]')
+        self.df_all_dict[self.start_max_scale] = preprocess.add_lag_features(df_all, max_scale=self.start_max_scale, USE_LAG = self.USE_LAG, max_window=self.max_window)
         self.df_all = self.df_all_dict[self.start_max_scale]
+    
         self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'mbd_origin', 'active', 'year','month', 'scale', 
                                 'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_high_trend', 'mbd_low_trend', 'y_base', 'y_pred', 'smape', 'smape_origin']
 
@@ -280,8 +280,12 @@ class LgbmBaseline():
         print('pred_m: ', pred_m)
         print('train_times: ', train_times)
 
-        print(f'use df_all_dict[{train_times}]')
-        df_all = self.df_all_dict[train_times]
+        if self.accum_cnt:
+            print(f'use df_all_dict[{train_times}]')
+            df_all = self.df_all_dict[train_times]
+        else:
+            print(f'use original df_all')
+            df_all = self.df_all
 
         target = f'select_rate{pred_m}'
         features = preprocess.create_features(df_all, pred_m, train_times, self.USE_LAG)

@@ -108,70 +108,76 @@ def get_trend_dict(df_all, train_time=40, n=2, thre=2, thre_r = 0.002, lower_bou
     return df_trend, trend_dict
 
 
-
-def add_location(df_all, use_umap=False):
-
-    import reverse_geocoder as rg
-    from sklearn.preprocessing import LabelEncoder
-    from sklearn.decomposition import PCA
-    from sklearn.cluster import KMeans
-
-    coordinates = df_all[['lng', 'lat']].values
-
-    # Encoding tricks
-    emb_size = 20
-    precision = 1e6
-
-    latlon = np.expand_dims(coordinates, axis=-1)
-
-    m = np.exp(np.log(precision)/emb_size)
-    angle_freq = m ** np.arange(emb_size)
-    angle_freq = angle_freq.reshape(1,1, emb_size)
-    latlon = latlon * angle_freq
-    latlon[..., 0::2] = np.cos(latlon[..., 0::2])
-
-    coordinates = list(zip(df_all['lat'], df_all['lng']))
-    results = rg.search(coordinates)
-    df_all['place'] = [x['admin2'] for x in results]
-
-    places = list(np.unique(df_all['county'].values))
-
-    def replace(x):
-        if x in places:
-            return x
+def rot(df):
+    for angle in [15, 30, 45]:
+        df[f'rot_{angle}_x'] = (np.cos(np.radians(angle)) * df['lat']) + \
+                                (np.sin(np.radians(angle)) * df['lng'])
         
-        else:
-            return 'Other'
+        df[f'rot_{angle}_y'] = (np.cos(np.radians(angle)) * df['lat']) - \
+                                (np.sin(np.radians(angle)) * df['lng'])
         
-    df_all['place'] = df_all['place'].apply(lambda x: replace(x))
+    return df
 
-    le = LabelEncoder()
-    df_all['place'] = le.fit_transform(df_all['place'])
 
-    pca = PCA().fit(coordinates)
-    df_all['pca_lat'] = pca.transform(coordinates)[:, 0]
-    df_all['pca_lon'] = pca.transform(coordinates)[:, 1]
+def add_location(df_all, use_umap=False, version='v2'):
 
-    if use_umap:
+    if version=='v1':
 
-        from umap import UMAP
+        # import reverse_geocoder as rg
+        # from sklearn.preprocessing import LabelEncoder
+        # from sklearn.decomposition import PCA
+        # from sklearn.cluster import KMeans
 
-        umap = UMAP(n_components=2,
-                n_neighbors=50,
-                random_state=2023).fit(coordinates)
-        df_all['umap_lat'] = umap.transform(coordinates)[:, 0]
-        df_all['umap_lon'] = umap.transform(coordinates)[:, 1]
+        coordinates = df_all[['lng', 'lat']].values
 
-    def rot(df):
-        for angle in [15, 30, 45]:
-            df[f'rot_{angle}_x'] = (np.cos(np.radians(angle)) * df['lat']) + \
-                                    (np.sin(np.radians(angle)) * df['lng'])
+        # Encoding tricks
+        emb_size = 20
+        precision = 1e6
+
+        latlon = np.expand_dims(coordinates, axis=-1)
+
+        m = np.exp(np.log(precision)/emb_size)
+        angle_freq = m ** np.arange(emb_size)
+        angle_freq = angle_freq.reshape(1,1, emb_size)
+        latlon = latlon * angle_freq
+        latlon[..., 0::2] = np.cos(latlon[..., 0::2])
+
+        coordinates = list(zip(df_all['lat'], df_all['lng']))
+        results = rg.search(coordinates)
+        df_all['place'] = [x['admin2'] for x in results]
+
+        places = list(np.unique(df_all['county'].values))
+
+        def replace(x):
+            if x in places:
+                return x
             
-            df[f'rot_{angle}_y'] = (np.cos(np.radians(angle)) * df['lat']) - \
-                                    (np.sin(np.radians(angle)) * df['lng'])
+            else:
+                return 'Other'
             
-        return df
+        df_all['place'] = df_all['place'].apply(lambda x: replace(x))
 
-    df_all = rot(df_all)
+        le = LabelEncoder()
+        df_all['place'] = le.fit_transform(df_all['place'])
 
-    return df_all
+        pca = PCA().fit(coordinates)
+        df_all['pca_lat'] = pca.transform(coordinates)[:, 0]
+        df_all['pca_lon'] = pca.transform(coordinates)[:, 1]
+
+        if use_umap:
+
+            from umap import UMAP
+
+            umap = UMAP(n_components=2,
+                    n_neighbors=50,
+                    random_state=2023).fit(coordinates)
+            df_all['umap_lat'] = umap.transform(coordinates)[:, 0]
+            df_all['umap_lon'] = umap.transform(coordinates)[:, 1]
+
+        df_all = rot(df_all)
+
+        return df_all
+
+
+    elif version=='v2':
+        return rot(df_all)
