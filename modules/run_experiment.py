@@ -29,12 +29,12 @@ def main(BASE, external, params, trend_params, validate=True, add_location=True,
     )
 
     if validate:
-        instance_validation = models.LgbmBaseline('validation', df_subm, df_all, df_census, start_all_dict=32, save_path=False, params=params, trend_params=trend_params)
+        instance_validation = models.LgbmBaseline('validation', df_subm, df_all, df_census, save_path=False, params=params, trend_params=trend_params)
         instance_validation.accum_validation()
 
     if merge41:
-        instalce_prediction = models.LgbmBaseline('submission', df_subm, df_all, df_census, start_all_dict=40, save_path=False, params=params, trend_params=trend_params)
+        instalce_prediction = models.LgbmBaseline('submission', df_subm, df_all, df_census, save_path=False, params=params, trend_params=trend_params)
         instalce_prediction.create_submission(target_scale=[42,43,44,45])
     else:
-        instalce_prediction = models.LgbmBaseline('submission', df_subm, df_all, df_census, start_all_dict=40, save_path=False, params=params, trend_params=trend_params)
+        instalce_prediction = models.LgbmBaseline('submission', df_subm, df_all, df_census, save_path=False, params=params, trend_params=trend_params)
         instalce_prediction.create_submission()
