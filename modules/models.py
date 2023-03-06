@@ -353,7 +353,7 @@ class LgbmBaseline():
 
         if self.USE_TREND:
 
-            for category in ['low', 'high']:
+            for category in ['high', 'low']:
                 
                 # pass if trend params don't exist.
                 if not self.trend_params.get(f'{category}_trend_params').get(self.accum_cnt+1):
