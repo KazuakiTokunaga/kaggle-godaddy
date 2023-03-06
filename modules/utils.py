@@ -305,9 +305,12 @@ def merge_coest(df_all,  BASE='../input/'):
 
 def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, county=True,
                 unemploy=True, coord=True, co_est=True, fix_pop=True, 
-                add_location=False, use_umap=False, categorize=False, merge41=False, df_subm=''):
+                add_location=False, use_umap=False, categorize=False, merge41=False, df_subm='', mbd_origin='after'):
 
     df_all = get_df_all(df_train, df_test, categorize=categorize, county=county)
+
+    if mbd_origin=='before':
+        df_all['mbd_origin'] = df_all[mbd]
 
     if pop:
         df_all = merge_pop(df_all, BASE)
@@ -330,7 +333,9 @@ def merge_dataset(df_train, df_test, BASE='../input/', pop=False, census=True, c
     if merge41:
         df_all = merge_scale41(df_all, df_subm, df_census)
 
-    df_all['mbd_origin'] = df_all[mbd]    
+    if mbd_origin=='after':
+        df_all['mbd_origin'] = df_all[mbd]    
+
     return df_all, df_census
 
 
@@ -342,7 +347,7 @@ def fix_population(df_all, df_census):
     for year in [2019, 2020, 2021]:
         indices = (df_all['year']==year)
         target_year_str = str(year - 2)
-        df_all.loc[indices, mbd] = df_all.loc[indices, mbd] *  df_all.loc[indices, 'adult_2020'] / df_all.loc[indices, f'adult_{target_year_str}']
+        df_all.loc[indices, mbd] = np.round(100 * df_all.loc[indices, 'active'] /  df_all.loc[indices, 'adult_2020'], 6)
     
     drop_columns = list(df_census.columns)
     drop_columns.remove('cfips')
