@@ -430,7 +430,7 @@ class LgbmBaseline():
             if self.save_path:
                 utils.save_pickle(self.output_dic, f'{name}')
             else:
-                save_path = f'{filename}.pickle'
+                save_path = f'{name}.pickle'
                 with open(save_path, 'wb') as f:
                     pickle.dump(self.output_dic, f)
             print(f'saved {name}.pickle')

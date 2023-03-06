@@ -451,11 +451,13 @@ def merge_scale41(df_all, df_submission, df_census):
     df_all.loc[idx, mbd] = df_all.loc[idx, 'mbd_pred']
     
     adult2020 = df_census.set_index('cfips')['adult_2020'].to_dict()
+    adult2021 = df_census.set_index('cfips')['adult_2021'].to_dict()
     df_all['adult2020'] = df_all['cfips'].map(adult2020)
-    df_all.loc[idx, 'active'] = np.round(df_all.loc[idx, 'mbd_pred'] * df_all.loc[idx, 'adult2020'] / 100)
-    df_all.loc[idx, 'mbd_origin'] = df_all.loc[idx, mbd]
+    df_all['adult2021'] = df_all['cfips'].map(adult2021)
+    df_all.loc[idx, 'active'] = np.round(df_all.loc[idx, 'mbd_pred'] * df_all.loc[idx, 'adult2021'] / 100)
+    df_all.loc[idx, mbd] = np.round(100 * df_all.loc[idx, 'active'] / df_all.loc[idx, 'adult2020'], 6)
 
-    df_all = df_all.drop(['mbd_pred', 'adult2020'], axis=1).set_index('row_id')
+    df_all = df_all.drop(['mbd_pred', 'adult2020', 'adult2021'], axis=1).set_index('row_id')
 
     return df_all
     
