@@ -438,6 +438,7 @@ def compare_submission(df_submission, filename):
 
 
 def merge_scale41(df_all, df_submission, df_census):
+    print('merge scale=41 of df_submission to df_all.')
     
     df_all = df_all.reset_index()
     

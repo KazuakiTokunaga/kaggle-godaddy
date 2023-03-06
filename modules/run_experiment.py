@@ -8,7 +8,7 @@ from modules import preprocess
 
 def main(BASE, external, params, trend_params, validate=True, add_location=True, coord=True,
         fix_pop=True, use_umap=False, co_est=True, census=True,
-        subm='/kaggle/input/godaddymy/submission_13769_trend.csv'):
+        subm='/kaggle/input/godaddymy/submission_13732_trend.csv'):
 
     mbd = 'microbusiness_density'
     merge41 = True if params.get('start_max_scale')==41 else False
