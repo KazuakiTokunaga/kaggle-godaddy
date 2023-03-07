@@ -94,7 +94,7 @@ def get_model(algo='lgb', light=False):
 
     elif algo=='tuned_ensemble':
 
-        print('use ensemble.')
+        print('use tuned_ensemble.')
         return VotingRegressor([
             ('xgb', xgb_model),
             ('lgb', lgb_model),
@@ -465,6 +465,8 @@ class LgbmBaseline():
 
     def accum_validation(self, max_month=40, max_pred_m = 5, m_len=5, export=True):
 
+        # self.df_season = utils.create_df_season(df_all)
+        
         self.run_validation(
             max_month=max_month,
             m_len=m_len+3,

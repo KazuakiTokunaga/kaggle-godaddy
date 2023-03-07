@@ -465,4 +465,17 @@ def merge_scale41(df_all, df_submission, df_census):
     df_all = df_all.drop(['mbd_pred', 'adult2020', 'adult2021'], axis=1).set_index('row_id')
 
     return df_all
+
+# def create_df_season(df_all, max_scale=40, thre=5000):
+
+#     df_t = df_all[(df_all['scale']<=max_scale)&(df_all[f'select_lastactive{max_scale}']>=thre)].copy()
+#     df_t['cnt'] = df_t['select_rate1'].apply(lambda x: 1 if x>0 else -1)
+#     df_t = df_t.groupby(['cfips', 'month'])sum()[['select_rate1', 'cnt']].reset_index()
+
+#     df_t = df_t[df_t['month']>=]
+#     df_t['month'] += 28
+
+#     df_t = df_t[df_t['month']<=5]
+#     df_t['month'] += 40
+#     df_t['select_rate1'] = df_t['select_rate1'] / df_t['cnt']
     
