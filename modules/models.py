@@ -130,7 +130,8 @@ class LgbmBaseline():
         "start_max_scale": 40,
         "start_all_dict": 32,
         "smooth_method": 'v3',
-        "save_output_dic": False
+        "save_output_dic": False,
+        "USE_SEASON": False
     }, trend_params = {
         "high_trend_params": {
             1: {
@@ -213,14 +214,21 @@ class LgbmBaseline():
                 },
                 'method': 'replace'
             }
-        }
-    }):
+        },
+    }, season_params = {
+        "abs_thre": [-0.003, 0.006],
+        "active_thre": 5000,
+        "v_clip": [-0.01, 0.01],
+        "method": "trend_mean"
+    }
+    ):
 
         self.run_fold_name = run_fold_name
         self.df_subm = df_subm
         self.df_census = df_census
         self.output_dic = '../output/'
         self.trend_params = trend_params
+        self.season_params = season_params
 
         self.act_thre = params['act_thre']
         self.abs_thre = params['abs_thre']
@@ -235,6 +243,7 @@ class LgbmBaseline():
         self.smooth_method = params.get('smooth_method') if params.get('smooth_method') else 'v3'
         self.start_all_dict = params.get('start_all_dict') if params.get('start_all_dict') else 32
         self.save_output_dic = params.get('save_output_dic') if params.get('save_output_dic') else False
+        self.USE_SEASON = params.get('USE_SEASON') if params.get('USE_SEASON') else False
 
         self.light = params.get('light')
         self.save_path = save_path
@@ -379,7 +388,34 @@ class LgbmBaseline():
                     raise Exception('Wrong Trend Method.')
             
                 df_valid.loc[~df_valid[c_name].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
+
+        df_valid['mbd_season'] = np.nan
+        df_valid['y_pred_season'] = np.nan
         
+        if self.USE_SEASON:
+            print('use SEASON.')
+
+            df_season_dict = self.df_season[self.df_season['scale']==valid_time].set_index('cfips')['select_rate1_mean'].to_dict()
+            df_valid['y_pred_season'] = df_valid['cfips'].map(df_season_dict)
+            df_valid['mbd_season'] = (df_valid['y_pred_season'] + 1) * df_valid['y_base']
+                        
+            season_idx = (~df_valid['mbd_season'].isna())
+            idx = season_idx&(df_valid['mbd_high_trend'].isna())&(df_valid['mbd_low_trend'].isna())
+            df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_pred'] + df_valid.loc[idx, 'mbd_season']) / 2
+            
+            print(f'# of cfips season affected: ', sum(idx))
+            
+            if self.season_params['method']=='trend_mean':
+            
+                cnt = 0
+                for c_name in ['mbd_high_trend', 'mbd_low_trend']:
+                    idx = season_idx&(~df_valid[c_name].isna())
+                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_model'] + df_valid.loc[idx, 'mbd_season'] + df_valid.loc[idx, c_name]) / 3
+                    
+                    cnt += sum(idx)
+
+                print(f'# of cfips season/trend/model mean: ', cnt)                
+
         df_valid['smape'] = utils.smape_arr(df_valid[mbd], df_valid['mbd_pred'])
         df_valid['smape_origin'] = utils.smape_arr(df_valid['mbd_origin'], df_valid['mbd_pred'])
         df_output = df_valid[self.output_features]
@@ -465,7 +501,13 @@ class LgbmBaseline():
 
     def accum_validation(self, max_month=40, max_pred_m = 5, m_len=5, export=True):
 
-        # self.df_season = utils.create_df_season(df_all)
+        if self.USE_SEASON:
+            max_train = max_month - m_len - max_pred_m + 1
+            abs_thre = self.season_params['abs_thre']
+            active_thre = self.season_params['active_thre']
+            v_clip = self.season_params['v_clip']
+            self.df_season = utils.create_df_season(self.df_all, validate=True,
+                abs_thre=abs_thre, active_thre=active_thre, v_clip = v_clip)
         
         self.run_validation(
             max_month=max_month,
@@ -489,6 +531,14 @@ class LgbmBaseline():
 
 
     def create_submission(self, target_scale=[41,42,43,44,45], save=True, filename=''):
+
+        if self.USE_SEASON:
+            abs_thre = self.season_params['abs_thre']
+            active_thre = self.season_params['active_thre']
+            v_clip = self.season_params['v_clip']
+            
+            self.df_season = utils.create_df_season(self.df_all, validate=False, 
+                active_thre=active_thre, abs_thre=abs_thre, v_clip=v_clip)
 
         self.run_validation(
             max_month=target_scale[0],
@@ -519,6 +569,9 @@ class LgbmBaseline():
             df_submission = utils.adjust_population(df_submission, self.df_census, start_month='2023-02-01')
         else:
             df_submission = utils.adjust_population(df_submission, self.df_census)
+
+        # round_to_integer
+        df_submission = utils.round_integer(df_submission, self.df_census)
         
         dt_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
         dt_str = dt_now.strftime('%Y-%m-%d_%H:%M:%S')

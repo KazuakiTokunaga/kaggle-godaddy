@@ -466,16 +466,45 @@ def merge_scale41(df_all, df_submission, df_census):
 
     return df_all
 
-# def create_df_season(df_all, max_scale=40, thre=5000):
+def create_df_season(df_all, active_thre=5000, validate=True, abs_thre=[-0.006, 0.006], v_clip=[-0.01, 0.01]):
 
-#     df_t = df_all[(df_all['scale']<=max_scale)&(df_all[f'select_lastactive{max_scale}']>=thre)].copy()
-#     df_t['cnt'] = df_t['select_rate1'].apply(lambda x: 1 if x>0 else -1)
-#     df_t = df_t.groupby(['cfips', 'month'])sum()[['select_rate1', 'cnt']].reset_index()
+    max_scale = 32 if validate else 40
+    print(f'create df_season, max_scale: {max_scale}, validate: {validate}')
 
-#     df_t = df_t[df_t['month']>=]
-#     df_t['month'] += 28
+    df_t = df_all[(df_all['scale']<=max_scale)&(df_all[f'select_lastactive{max_scale}']>=active_thre)].copy()
+    df_t['select_rate1'] = df_t['select_rate1'].clip(v_clip[0], v_clip[1])
+    df_t['cnt'] = df_t['select_rate1'].apply(lambda x: 1 if x>0 else -1)
 
-#     df_t = df_t[df_t['month']<=5]
-#     df_t['month'] += 40
-#     df_t['select_rate1'] = df_t['select_rate1'] / df_t['cnt']
+    df_s = df_t.groupby(['cfips', 'month']).agg(['sum', 'count'])[['select_rate1', 'cnt']].reset_index()
+    df_s.columns = ['cfips', 'month'] + ['_'.join(col) for col in df_s.columns.values[2:]]
+    df_s['select_rate1_mean'] = df_s['select_rate1_sum'] / df_s['cnt_count']
+
+    if validate:
+        df_s['scale'] = df_s['month'] + 28
+    else:
+        df_s['scale'] = df_s['month'] + 40
+
+    up_idx = (df_s['select_rate1_mean']>=abs_thre[1])&(df_s['cnt_sum']==df_s['cnt_count'])
+    df_up = df_s.loc[up_idx, ['cfips', 'select_rate1_mean', 'scale']]
+
+    down_idx = (df_s['select_rate1_mean']<=-1*abs_thre[0])&(-1*df_s['cnt_sum']==df_s['cnt_count'])
+    df_down = df_s.loc[down_idx, ['cfips', 'select_rate1_mean', 'scale']]
     
+
+    return pd.concat([df_up, df_down])
+
+
+def round_integer(df_submission, df_census):
+        
+    df_submission = df_submission.reset_index()
+    df_submission['cfips'] = df_submission['row_id'].apply(lambda x: int(x.split('_')[0]))
+    df_submission['month'] = df_submission['row_id'].apply(lambda x: x.split('_')[1])
+    adult2021 = df_census.set_index('cfips')['adult_2021'].to_dict()
+    df_submission['adult2021'] = df_submission['cfips'].map(adult2021)
+
+    idx = (df_submission['month']>='2023-01-01')
+    df_submission.loc[idx, mbd] = np.round(df_submission.loc[idx, mbd] * df_submission.loc[idx, 'adult2021'] / 100) / df_submission.loc[idx, 'adult2021'] * 100
+    df_submission = df_submission.drop(['adult2021','cfips', 'month'],axis=1)
+    df_submission = df_submission.set_index('row_id')
+
+    return df_submission
