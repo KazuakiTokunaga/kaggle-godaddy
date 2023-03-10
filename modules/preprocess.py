@@ -46,8 +46,8 @@ def add_lag_features(df_all, max_scale=40, USE_LAG=7, max_window=12, smooth=Fals
 
 
 def create_features(df_all, pred_m, train_times, USE_LAG = 5):
-    # drop_features = [mbd, 'mbd_origin', 'state', 'active', 'county', 'cfips', 'month', 'year']
-    drop_features = [mbd, 'mbd_origin', 'state', 'active', 'county', 'cfips', 'year']
+    drop_features = [mbd, 'mbd_origin', 'state', 'active', 'county', 'cfips', 'month', 'year']
+    # drop_features = [mbd, 'mbd_origin', 'state', 'active', 'county', 'cfips', 'year']
     features = list(filter(lambda x: (not x.startswith('select_') and (x not in drop_features)),  df_all.columns.to_list()))
     features += list(filter(lambda x: (x.startswith(f'select_rate{pred_m}_')), df_all.columns.to_list()))
     features += list(filter(lambda x: (x.startswith(f'select_active_lag{pred_m}_diff')), df_all.columns.to_list()))
@@ -123,14 +123,14 @@ def rot(df):
     return df
 
 
-def add_location(df_all, use_umap=False, version='v2'):
+def add_location(df_all, use_umap=False, version='v1'):
 
     if version=='v1':
 
-        # import reverse_geocoder as rg
-        # from sklearn.preprocessing import LabelEncoder
-        # from sklearn.decomposition import PCA
-        # from sklearn.cluster import KMeans
+        import reverse_geocoder as rg
+        from sklearn.preprocessing import LabelEncoder
+        from sklearn.decomposition import PCA
+        from sklearn.cluster import KMeans
 
         coordinates = df_all[['lng', 'lat']].values
 
