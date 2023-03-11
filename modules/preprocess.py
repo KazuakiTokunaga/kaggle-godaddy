@@ -47,7 +47,6 @@ def add_lag_features(df_all, max_scale=40, USE_LAG=7, max_window=12, smooth=Fals
 
 def create_features(df_all, pred_m, train_times, USE_LAG = 5):
     drop_features = [mbd, 'mbd_origin', 'state', 'active', 'county', 'cfips', 'month', 'year']
-    # drop_features = [mbd, 'mbd_origin', 'state', 'active', 'county', 'cfips', 'year']
     features = list(filter(lambda x: (not x.startswith('select_') and (x not in drop_features)),  df_all.columns.to_list()))
     features += list(filter(lambda x: (x.startswith(f'select_rate{pred_m}_')), df_all.columns.to_list()))
     features += list(filter(lambda x: (x.startswith(f'select_active_lag{pred_m}_diff')), df_all.columns.to_list()))
@@ -68,7 +67,7 @@ def regularize(x, v):
     return x
 
 
-def get_trend_dict(df_all, train_time=40, n=2, thre=2, thre_r = 0.002, lower_bound=20, upper_bound=140, 
+def get_trend_dict(df_all, train_time=40, n=2, thre=2, thre_r = 0.002, lower_bound=20, upper_bound=140, trend_clip=[None, None],
                     use_regularize=True, v_regularize=[0.025, 0.025], v_clip=[0.9975, 1.004]):
 
     dt = df_all.loc[df_all.scale==train_time].groupby('cfips')['active'].agg('last')
@@ -84,6 +83,7 @@ def get_trend_dict(df_all, train_time=40, n=2, thre=2, thre_r = 0.002, lower_bou
             df_target_lag[f'rate{i}'] = df_target_lag['mbd_origin'] / df_target_lag[f'lag_{i}']
         else:
             df_target_lag[f'rate{i}'] = df_target_lag[f'lag_{i-1}'] / df_target_lag[f'lag_{i}']
+        df_target_lag[f'rate{i}'] = df_target_lag[f'rate{i}'].clip(trend_clip[0], trend_clip[1])
 
     cs = ['cfips', 'mbd_origin', 'active', 'scale'] + [f'rate{i}' for i in range(1, n+1)]
     df_target = df_target_lag.loc[df_target_lag['scale']==train_time, cs].copy()
@@ -123,14 +123,14 @@ def rot(df):
     return df
 
 
-def add_location(df_all, use_umap=False, version='v1'):
+def add_location(df_all, use_umap=False, version='v2'):
 
     if version=='v1':
 
-        import reverse_geocoder as rg
-        from sklearn.preprocessing import LabelEncoder
-        from sklearn.decomposition import PCA
-        from sklearn.cluster import KMeans
+        # import reverse_geocoder as rg
+        # from sklearn.preprocessing import LabelEncoder
+        # from sklearn.decomposition import PCA
+        # from sklearn.cluster import KMeans
 
         coordinates = df_all[['lng', 'lat']].values
 

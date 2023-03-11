@@ -121,6 +121,7 @@ class LgbmBaseline():
         "abs_thre": 1.00,
         "USE_LAG": 5,
         "USE_TREND": False,
+        "USE_SHORT_TREND": False,
         "blacklist": [],
         "blacklistcfips": [],
         "clip": (None, None),
@@ -220,8 +221,7 @@ class LgbmBaseline():
         "active_thre": 5000,
         "v_clip": [-0.01, 0.01],
         "method": "trend_mean"
-    }
-    ):
+    }):
 
         self.run_fold_name = run_fold_name
         self.df_subm = df_subm
@@ -234,6 +234,7 @@ class LgbmBaseline():
         self.abs_thre = params['abs_thre']
         self.USE_LAG = params['USE_LAG']
         self.USE_TREND = params['USE_TREND']
+        self.USE_SHORT_TREND = params['USE_SHORT_TREND']
         self.blacklist = params['blacklist']
         self.blacklistcfips = params['blacklistcfips']
         self.clip = params['clip']
@@ -268,7 +269,7 @@ class LgbmBaseline():
         self.df_all = self.df_all_dict[self.start_max_scale]
     
         self.output_features = ['cfips', 'county', 'state', 'state_i', 'microbusiness_density', 'mbd_origin', 'active', 'year','month', 'scale', 
-                                'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_high_trend', 'mbd_low_trend', 'y_base', 'y_pred', 'smape', 'smape_origin']
+                                'mbd_pred', 'mbd_model', 'mbd_last', 'mbd_trend', 'mbd_short_trend', 'mbd_season', 'y_base', 'y_pred', 'smape', 'smape_origin']
 
 
     def get_df_all_dict(self, train_times, smooth=False):
@@ -357,41 +358,61 @@ class LgbmBaseline():
         df_valid.loc[lastvalue_indices, 'y_pred'] = df_valid.loc[lastvalue_indices, f'select_rate{pred_m}_lag{pred_m}']
         
         # USE Trend.
-        df_valid['mbd_high_trend'] = np.nan
-        df_valid['mbd_low_trend'] = np.nan
-
+        df_valid['mbd_trend'] = np.nan
         if self.USE_TREND:
 
             for category in ['high', 'low']:
-                
+
                 # pass if trend params don't exist.
                 if not self.trend_params.get(f'{category}_trend_params').get(self.accum_cnt+1):
                     continue
-
-                c_name = f'mbd_{category}_trend'
+                
                 trend_params = self.trend_params.get(f'{category}_trend_params').get(self.accum_cnt+1).get('params')
                 trend_method = self.trend_params.get(f'{category}_trend_params').get(self.accum_cnt+1).get('method')
 
                 df_trend, trend_dict= preprocess.get_trend_dict(df_all, train_times, **trend_params)
                 print(f'# of cfips that have {category} trend :', len(trend_dict))
                 print('use method: ', trend_method)
-                df_valid[c_name] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
+                df_valid['mbd_trend'] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
 
                 if trend_method=='replace':
-                    df_valid.loc[~df_valid[c_name].isna(), 'mbd_pred'] = df_valid.loc[~df_valid[c_name].isna(), c_name]
+                    df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_pred'] = df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_trend']
                 elif trend_method=='mean':
-                    idx = (~df_valid[c_name].isna())&(~df_valid['mbd_pred'].isna())
-                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, c_name] + df_valid.loc[idx, 'mbd_pred']) / 2
-                    idx = (~df_valid[c_name].isna())&(df_valid['mbd_pred'].isna())
-                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, c_name]
+                    idx = (~df_valid['mbd_trend'].isna())&(~df_valid['mbd_pred'].isna())
+                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_trend'] + df_valid.loc[idx, 'mbd_pred']) / 2
+                    idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_pred'].isna())
+                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend']
                 else:
                     raise Exception('Wrong Trend Method.')
             
-                df_valid.loc[~df_valid[c_name].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
+                df_valid.loc[~df_valid['mbd_trend'].isna(), 'y_pred'] = df_valid['cfips'].map(trend_dict) - 1
+        
+        df_valid['mbd_short_trend'] = np.nan
+        if self.USE_SHORT_TREND:
+
+            # pass if trend params don't exist.
+            if self.trend_params.get(f'short_trend_params').get(self.accum_cnt+1):
+          
+                trend_params = self.trend_params.get(f'short_trend_params').get(self.accum_cnt+1).get('params')
+                trend_method = self.trend_params.get(f'short_trend_params').get(self.accum_cnt+1).get('method')
+
+                df_trend, trend_dict= preprocess.get_trend_dict(df_all, train_times, **trend_params)
+                print('use method: ', trend_method)
+                df_valid['mbd_short_trend'] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
+
+                idx = (~df_valid['mbd_short_trend'].isna())&(df_valid['mbd_trend'].isna())
+                df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_short_trend'] + df_valid.loc[idx, 'mbd_pred']) / 2
+                print(f'# of cfips that have only short trend :', sum(idx))
+
+                if trend_method == 'mix':
+                    idx = (~df_valid['mbd_short_trend'].isna())&(~df_valid['mbd_trend'].isna())
+                    df_valid.iloc[idx, 'mbd_trend'] = df_valid.loc[idx, 'mbd_trend'] * 0.5 + df_valid.loc[idx, 'mbd_short_trend'] * 0.5
+                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.5 + df_valid.loc[idx, 'mbd_pred'] * 0.5
+                    print(f'# of cfips that have both short and long trend :', sum(idx))
+            
 
         df_valid['mbd_season'] = np.nan
         df_valid['y_pred_season'] = np.nan
-        
         if self.USE_SEASON:
             print('use SEASON.')
 
@@ -400,21 +421,17 @@ class LgbmBaseline():
             df_valid['mbd_season'] = (df_valid['y_pred_season'] + 1) * df_valid['y_base']
                         
             season_idx = (~df_valid['mbd_season'].isna())
-            idx = season_idx&(df_valid['mbd_high_trend'].isna())&(df_valid['mbd_low_trend'].isna())
+            idx = season_idx&(df_valid['mbd_trend'].isna())
             df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_pred'] + df_valid.loc[idx, 'mbd_season']) / 2
             
             print(f'# of cfips season affected: ', sum(idx))
             
             if self.season_params['method']=='trend_mean':
             
-                cnt = 0
-                for c_name in ['mbd_high_trend', 'mbd_low_trend']:
-                    idx = season_idx&(~df_valid[c_name].isna())
-                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_model'] + df_valid.loc[idx, 'mbd_season'] + df_valid.loc[idx, c_name]) / 3
-                    
-                    cnt += sum(idx)
+                idx = season_idx&(~df_valid['mbd_trend'].isna())
+                df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_model'] + df_valid.loc[idx, 'mbd_season'] + df_valid.loc[idx, 'mbd_trend']) / 3
 
-                print(f'# of cfips season/trend/model mean: ', cnt)                
+                print(f'# of cfips season/trend/model mean: ', sum(idx))                
 
         df_valid['smape'] = utils.smape_arr(df_valid[mbd], df_valid['mbd_pred'])
         df_valid['smape_origin'] = utils.smape_arr(df_valid['mbd_origin'], df_valid['mbd_pred'])
