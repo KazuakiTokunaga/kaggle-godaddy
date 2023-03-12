@@ -14,10 +14,10 @@ from sklearn.pipeline import Pipeline
 mbd = 'microbusiness_density'
 
 
-def get_model(algo='lgb', light=False):
+def get_model(algo='lgb', light=False, lgbm_n=300):
 
     params = {
-        'n_iter': 300,
+        'n_iter': lgbm_n,
         'verbosity': -1,
         'objective': 'l1',
         'random_state': 42,
@@ -127,6 +127,7 @@ class LgbmBaseline():
         "clip": (None, None),
         "model": 'lgbm',
         "light": False,
+        "lgbm_n": 300,
         "max_window": 12,
         "start_max_scale": 40,
         "start_all_dict": 32,
@@ -245,6 +246,7 @@ class LgbmBaseline():
         self.start_all_dict = params.get('start_all_dict') if params.get('start_all_dict') else 32
         self.save_output_dic = params.get('save_output_dic') if params.get('save_output_dic') else False
         self.USE_SEASON = params.get('USE_SEASON') if params.get('USE_SEASON') else False
+        self.lgbm_n = params.get('lgbm_n') if params.get('lgbm_n') else 300
 
         self.light = params.get('light')
         self.save_path = save_path
