@@ -75,7 +75,7 @@ def get_model(algo='lgb', light=False, lgbm_n=300):
 
     if algo=='lgb':
         
-        print('use lgb.')
+        print(f'use lgb')
         return lgb_model
     
     elif algo=='xgb':
@@ -337,7 +337,7 @@ class LgbmBaseline():
         y_valid = df_valid.loc[valid_indices, target]
         
         # Create Model and predict.
-        model = get_model(algo=self.model, light=self.light)
+        model = get_model(algo=self.model, light=self.light, lgbm_n = self.lgbm_n)
         model.fit(X_train, y_train.clip(self.clip[0], self.clip[1]))
         y_pred = model.predict(X_valid)
         
