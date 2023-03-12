@@ -7,11 +7,11 @@ from modules import utils
 mbd = 'microbusiness_density'
 
 
-def add_lag_features(df_all, max_scale=40, USE_LAG=7, max_window=12, smooth=False, smooth_method='v3'):
+def add_lag_features(df_all, max_scale=40, USE_LAG=7, max_window=12, smooth=False, smooth_method='v3', v3_thre=0.1, v3_adjust=0.003):
     print(f'add lag features: max_scale={max_scale}')
 
     if smooth:
-        df_all = utils.smooth_outlier(df_all, max_scale=max_scale, method=smooth_method)
+        df_all = utils.smooth_outlier(df_all, max_scale=max_scale, method=smooth_method, v3_thre=v3_thre, v3_adjust=v3_adjust)
 
     for i in range(30, max_scale+1):
         dt = df_all.loc[df_all.scale==i].groupby('cfips')['active'].agg('last')

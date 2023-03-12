@@ -132,6 +132,8 @@ class LgbmBaseline():
         "start_max_scale": 40,
         "start_all_dict": 32,
         "smooth_method": 'v3',
+        "v3_thre": 0.1,
+        "v3_adjust": 0.003,
         "save_output_dic": False,
         "USE_SEASON": False
     }, trend_params = {
@@ -247,6 +249,8 @@ class LgbmBaseline():
         self.save_output_dic = params.get('save_output_dic') if params.get('save_output_dic') else False
         self.USE_SEASON = params.get('USE_SEASON') if params.get('USE_SEASON') else False
         self.lgbm_n = params.get('lgbm_n') if params.get('lgbm_n') else 300
+        self.v3_adjust = params.get('v3_adjust') if params.get('v3_adjust') else 0.003
+        self.v3_thre = params.get('v3_thre') if params.get('v3_thre') else 0.1
 
         self.light = params.get('light')
         self.save_path = save_path
@@ -264,7 +268,9 @@ class LgbmBaseline():
                 USE_LAG = self.USE_LAG, 
                 max_window=self.max_window,
                 smooth=True,
-                smooth_method=self.smooth_method
+                smooth_method=self.smooth_method,
+                v3_thre = self.v3_thre,
+                v3_adjust = self.v3_adjust
                 )
             self.df_all_dict_original[i] = self.df_all_dict[i]
 
@@ -303,7 +309,9 @@ class LgbmBaseline():
                 USE_LAG=self.USE_LAG, 
                 max_window=self.max_window,
                 smooth=smooth, 
-                smooth_method=self.smooth_method
+                smooth_method=self.smooth_method,
+                v3_thre = self.v3_thre,
+                v3_adjust = self.v3_adjust
             )
             
             self.df_all_dict[i] = df_all_t

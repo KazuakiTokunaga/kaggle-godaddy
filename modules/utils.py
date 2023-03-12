@@ -182,7 +182,7 @@ def merge_coord(df_all, BASE='../input/'):
 
     return df_all
 
-def smooth_outlier(df_all_base, max_scale=40, method='v1'):
+def smooth_outlier(df_all_base, max_scale=40, method='v1', v3_thre=0.1, v3_adjust=0.003):
     print(f'smooth_outlier: max_scale={max_scale}')
     
     outliers = []
@@ -237,13 +237,13 @@ def smooth_outlier(df_all_base, max_scale=40, method='v1'):
             
             if o not in [28055, 48301]:
                 for i in range(max_scale-3, 2, -1):
-                    thr = 0.10 * np.mean(var[:i]) 
+                    thr = v3_thre * np.mean(var[:i]) 
                     difa = var[i] - var[i - 1] 
                     if (difa >= thr) or (difa <= -thr):  
                         if difa > 0:
-                            var[:i] += difa - 0.003
+                            var[:i] += difa - v3_adjust
                         else:
-                            var[:i] += difa + 0.003 
+                            var[:i] += difa + v3_adjust
                         outliers.append(o)
                         cnt+=1
             var[0] = var[1] * 0.99
