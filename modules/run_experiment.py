@@ -28,6 +28,7 @@ def main(BASE, external, params, trend_params, season_params, validate=True, add
     )
 
     if validate:
+        params['start_all_dict']= 32
         instance_validation = models.LgbmBaseline('validation', df_subm, df_all, df_census, save_path=False, params=params, trend_params=trend_params, season_params=season_params)
         instance_validation.accum_validation()
 
