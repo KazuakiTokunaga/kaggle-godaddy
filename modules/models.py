@@ -137,6 +137,8 @@ class LgbmBaseline():
         "model": 'lgbm',
         "light": False,
         "lgbm_params": {
+            'n_iter': 30,
+            'learning_rate': 0.0036,
             'colsample_bytree': 0.884,
             'colsample_bynode': 0.101,
             'max_depth': 8,
