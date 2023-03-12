@@ -14,21 +14,30 @@ from sklearn.pipeline import Pipeline
 mbd = 'microbusiness_density'
 
 
-def get_model(algo='lgb', light=False, lgbm_n=300):
+def get_model(algo='lgb', light=False, lgbm_params = {
+    'n_iter': 30,
+    'learning_rate': 0.0036,
+    'colsample_bytree': 0.884,
+    'colsample_bynode': 0.101,
+    'max_depth': 8,
+    'lambda_l2': 0.5,
+    'num_leaves': 61,
+    'min_data_in_leaf': 213
+}):
 
     params = {
-        'n_iter': lgbm_n,
+        'n_iter': lgbm_params['n_iter'],
         'verbosity': -1,
         'objective': 'l1',
         'random_state': 42,
-        'colsample_bytree': 0.8841279649367693,
-        'colsample_bynode': 0.10142964450634374,
-        'max_depth': 8,
-        'learning_rate': 0.003647749926797374,
-        'lambda_l2': 0.5,
-        'num_leaves': 61,
+        'colsample_bytree': lgbm_params['colsample_bytree'],
+        'colsample_bynode': lgbm_params['colsample_bynode'],
+        'max_depth': lgbm_params['max_depth'],
+        'learning_rate': lgbm_params['learning_rate'],
+        'lambda_l2': lgbm_params['lambda_l2'],
+        'num_leaves': lgbm_params['num_leaves'],
         "seed": 42,
-        'min_data_in_leaf': 213
+        'min_data_in_leaf': lgbm_params['min_data_in_leaf']
     }
 
     if light:
@@ -127,7 +136,14 @@ class LgbmBaseline():
         "clip": (None, None),
         "model": 'lgbm',
         "light": False,
-        "lgbm_n": 300,
+        "lgbm_params": {
+            'colsample_bytree': 0.884,
+            'colsample_bynode': 0.101,
+            'max_depth': 8,
+            'lambda_l2': 0.5,
+            'num_leaves': 61,
+            'min_data_in_leaf': 213
+        },
         "max_window": 12,
         "start_max_scale": 40,
         "start_all_dict": 32,
@@ -248,9 +264,9 @@ class LgbmBaseline():
         self.start_all_dict = params.get('start_all_dict') if params.get('start_all_dict') else 32
         self.save_output_dic = params.get('save_output_dic') if params.get('save_output_dic') else False
         self.USE_SEASON = params.get('USE_SEASON') if params.get('USE_SEASON') else False
-        self.lgbm_n = params.get('lgbm_n') if params.get('lgbm_n') else 300
         self.v3_adjust = params.get('v3_adjust') if params.get('v3_adjust') else 0.003
         self.v3_thre = params.get('v3_thre') if params.get('v3_thre') else 0.1
+        self.lgbm_params = params.get('lgbm_params')
 
         self.light = params.get('light')
         self.save_path = save_path
@@ -345,7 +361,7 @@ class LgbmBaseline():
         y_valid = df_valid.loc[valid_indices, target]
         
         # Create Model and predict.
-        model = get_model(algo=self.model, light=self.light, lgbm_n = self.lgbm_n)
+        model = get_model(algo=self.model, light=self.light,lgbm_params=self.lgbm_params)
         model.fit(X_train, y_train.clip(self.clip[0], self.clip[1]))
         y_pred = model.predict(X_valid)
         
@@ -483,6 +499,8 @@ class LgbmBaseline():
         name = self.run_fold_name + f'_{dt_str}'
 
         df = pd.DataFrame(output_array, columns=['mean', 'std'], index=list(range(1, 7)))
+        df.loc[6, 'mean'] = df.loc[2:4, 'mean'].mean()
+        df.loc[6, 'std'] = df.loc[3:5, 'mean'].mean()
 
         if self.save_path:
             df.to_csv(f'../output/{name}.csv')
