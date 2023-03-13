@@ -406,9 +406,9 @@ class LgbmBaseline():
                 if trend_method=='replace':
                     df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_pred'] = df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_trend']
                 elif trend_method=='mean':
-                    idx = (~df_valid['mbd_trend'].isna())&(~df_valid['mbd_pred'].isna())
-                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_trend'] + df_valid.loc[idx, 'mbd_pred']) / 2
-                    idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_pred'].isna())
+                    idx = (~df_valid['mbd_trend'].isna())&(~df_valid['mbd_model'].isna())
+                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_model'] + df_valid.loc[idx, 'mbd_pred']) / 2
+                    idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_model'].isna())
                     df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend']
                 else:
                     raise Exception('Wrong Trend Method.')
@@ -429,13 +429,13 @@ class LgbmBaseline():
                 df_valid['mbd_short_trend'] = df_valid['y_base'] * df_valid['cfips'].map(trend_dict)
 
                 idx = (~df_valid['mbd_short_trend'].isna())&(df_valid['mbd_trend'].isna())
-                df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_short_trend'] + df_valid.loc[idx, 'mbd_pred']) / 2
+                df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_short_trend'] + df_valid.loc[idx, 'mbd_model']) / 2
                 print(f'# of cfips that have only short trend :', sum(idx))
 
                 if trend_method == 'mix':
                     idx = (~df_valid['mbd_short_trend'].isna())&(~df_valid['mbd_trend'].isna())
                     df_valid.loc[idx, 'mbd_trend'] = df_valid.loc[idx, 'mbd_trend'] * 0.5 + df_valid.loc[idx, 'mbd_short_trend'] * 0.5
-                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.5 + df_valid.loc[idx, 'mbd_pred'] * 0.5
+                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.5 + df_valid.loc[idx, 'mbd_model'] * 0.5
                     print(f'# of cfips that have both short and long trend :', sum(idx))
             
 
@@ -450,7 +450,7 @@ class LgbmBaseline():
                         
             season_idx = (~df_valid['mbd_season'].isna())
             idx = season_idx&(df_valid['mbd_trend'].isna())
-            df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_pred'] + df_valid.loc[idx, 'mbd_season']) / 2
+            df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_model'] + df_valid.loc[idx, 'mbd_season']) / 2
             
             print(f'# of cfips season affected: ', sum(idx))
             
