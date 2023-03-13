@@ -407,7 +407,7 @@ class LgbmBaseline():
                     df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_pred'] = df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_trend']
                 elif trend_method=='mean':
                     idx = (~df_valid['mbd_trend'].isna())&(~df_valid['mbd_model'].isna())
-                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_model'] + df_valid.loc[idx, 'mbd_pred']) / 2
+                    df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_trend'] * 0.75 + df_valid.loc[idx, 'mbd_model'] * 0.25
                     idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_model'].isna())
                     df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend']
                 else:
@@ -457,7 +457,7 @@ class LgbmBaseline():
             if self.season_params['method']=='trend_mean':
             
                 idx = season_idx&(~df_valid['mbd_trend'].isna())
-                df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_model'] + df_valid.loc[idx, 'mbd_season'] + df_valid.loc[idx, 'mbd_trend']) / 3
+                df_valid.loc[idx, 'mbd_pred'] = (df_valid.loc[idx, 'mbd_model'] * 0.2 + df_valid.loc[idx, 'mbd_season'] * 0.4 + df_valid.loc[idx, 'mbd_trend'] * 0.4
 
                 print(f'# of cfips season/trend/model mean: ', sum(idx))                
 
