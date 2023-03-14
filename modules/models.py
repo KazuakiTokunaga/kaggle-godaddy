@@ -435,7 +435,7 @@ class LgbmBaseline():
                 if trend_method == 'mix':
                     idx = (~df_valid['mbd_short_trend'].isna())&(~df_valid['mbd_trend'].isna())
                     df_valid.loc[idx, 'mbd_trend'] = df_valid.loc[idx, 'mbd_trend'] * 0.5 + df_valid.loc[idx, 'mbd_short_trend'] * 0.5
-                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.75 + df_valid.loc[idx, 'mbd_model'] * 0.25
+                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.7 + df_valid.loc[idx, 'mbd_model'] * 0.3
                     print(f'# of cfips that have both short and long trend :', sum(idx))
             
 
@@ -457,7 +457,7 @@ class LgbmBaseline():
             if self.season_params['method']=='trend_mean':
             
                 idx = season_idx&(~df_valid['mbd_trend'].isna())
-                df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_model'] * 0.2 + df_valid.loc[idx, 'mbd_season'] * 0.4 + df_valid.loc[idx, 'mbd_trend'] * 0.4
+                df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_model'] * 0.25 + df_valid.loc[idx, 'mbd_season'] * 0.37 + df_valid.loc[idx, 'mbd_trend'] * 0.38
 
                 print(f'# of cfips season/trend/model mean: ', sum(idx))                
 
