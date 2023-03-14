@@ -406,22 +406,12 @@ class LgbmBaseline():
                 if trend_method=='replace':
                     df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_pred'] = df_valid.loc[~df_valid['mbd_trend'].isna(), 'mbd_trend']
                 
-                elif trend_method=='mean_origin':
+                elif trend_method=='mean':
                     idx = (~df_valid['mbd_trend'].isna())&(~df_valid['mbd_model'].isna())
                     df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.75 + df_valid.loc[idx, 'mbd_model'] * 0.25
                     idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_model'].isna())
                     df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend']
-
-                elif trend_method=='mean':
-
-                    idx = (~df_valid['mbd_trend'].isna())&(~df_valid['mbd_model'].isna())                    
-                    if category=='high':
-                        df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.75 + df_valid.loc[idx, 'mbd_model'] * 0.25
-                    else:
-                        df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.5 + df_valid.loc[idx, 'mbd_model'] * 0.5
-                    idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_model'].isna())
-                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend']
-
+                
                 else:
                     raise Exception('Wrong Trend Method.')
             
@@ -469,7 +459,7 @@ class LgbmBaseline():
             if self.season_params['method']=='trend_mean':
             
                 idx = season_idx&(~df_valid['mbd_trend'].isna())
-                df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_model'] * 0.25 + df_valid.loc[idx, 'mbd_season'] * 0.37 + df_valid.loc[idx, 'mbd_trend'] * 0.38
+                df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_model'] * 0.33 + df_valid.loc[idx, 'mbd_season'] * 0.33 + df_valid.loc[idx, 'mbd_trend'] * 0.34
 
                 print(f'# of cfips season/trend/model mean: ', sum(idx))                
 
