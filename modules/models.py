@@ -410,6 +410,16 @@ class LgbmBaseline():
                     df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.75 + df_valid.loc[idx, 'mbd_model'] * 0.25
                     idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_model'].isna())
                     df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend']
+                elif trend_method=='mean_v2':
+
+                    idx = (~df_valid['mbd_trend'].isna())&(~df_valid['mbd_model'].isna())                    
+                    if category=='high':
+                        df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.75 + df_valid.loc[idx, 'mbd_model'] * 0.25
+                    else:
+                        df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.5 + df_valid.loc[idx, 'mbd_model'] * 0.5
+                    idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_model'].isna())
+                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend']
+
                 else:
                     raise Exception('Wrong Trend Method.')
             
