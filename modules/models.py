@@ -408,7 +408,7 @@ class LgbmBaseline():
                 
                 elif trend_method=='mean':
                     idx = (~df_valid['mbd_trend'].isna())&(~df_valid['mbd_model'].isna())
-                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.85 + df_valid.loc[idx, 'mbd_model'] * 0.15
+                    df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend'] * 0.75 + df_valid.loc[idx, 'mbd_model'] * 0.25
                     idx = (~df_valid['mbd_trend'].isna())&(df_valid['mbd_model'].isna())
                     df_valid.loc[idx, 'mbd_pred'] = df_valid.loc[idx, 'mbd_trend']
                 
